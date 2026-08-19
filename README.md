@@ -1,7 +1,11 @@
 ## WinUI Lib
 
-# UI COMPONENTS
-
+# Load Libary
+---
+```lua
+local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
+```
+---
 # Button
 ---
 ```lua
