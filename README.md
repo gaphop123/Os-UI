@@ -1,8 +1,12 @@
-## WinUI Lib
+## WinUI Lib + MacUI Lib
 # Load Libary
 ---
 ```lua
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
+```
+---
+```lua
+local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 ---
 # Window
@@ -18,6 +22,21 @@ local Window = WinUI:CreateWindow({
         FileName = "Config"
     }
 })
+```
+---
+```lua
+MacUI:CreateConfig({Folder = "MacUI", File = "DemoConfig"})
+MacUI:LoadConfig()
+
+local Window = MacUI:CreateWindow({
+    Name = "MacUI",
+    Subtitle = "Demo Application",
+    Theme = "Dark",
+    Acrylic = true,
+    Size = UDim2.new(0, 760, 0, 520)
+})
+
+Window:CreateSearch()
 ```
 ---
 
