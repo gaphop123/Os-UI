@@ -5,11 +5,6 @@
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 ```
 ---
----
-```lua
-local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
-```
----
 # Window
 ```lua
 local Window = WinUI:CreateWindow({
