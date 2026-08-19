@@ -1,5 +1,4 @@
-## WinUI Lib + MacUI
-
+## WinUI Lib
 # Load Libary
 ---
 ```lua
@@ -24,22 +23,6 @@ local Window = WinUI:CreateWindow({
         FileName = "Config"
     }
 })
-
-local Home = Window:CreateTab("Home", "home")
-local Settings = Window:CreateTab("Settings", "settings")
-local Player = Window:CreateTab("Player", "player")
-
-Home:CreateSection("Welcome")
-Home:CreateLabel({ Text = "Welcome to WinUI – Windows 10 inspired library" })
-Home:CreateParagraph({
-    Title = "About",
-    Content = "This library follows Windows 10 visual language with a Rayfield-style API."
-})
-```
----
-
-```lua
-local Window = MacUI:CreateWindow({ Name = "Example", Subtitle = "MacUI Demo", Theme = "Dark", Acrylic = true })
 ```
 ---
 
