@@ -11,6 +11,38 @@ local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop1
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 ---
+# Window
+```lua
+local Window = WinUI:CreateWindow({
+    Name = "Windows 10",
+    LoadingTitle = "WinUI",
+    LoadingSubtitle = "Windows 10 UI Library",
+    Theme = "Windows10Dark",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "WinUI",
+        FileName = "Config"
+    }
+})
+
+local Home = Window:CreateTab("Home", "home")
+local Settings = Window:CreateTab("Settings", "settings")
+local Player = Window:CreateTab("Player", "player")
+
+Home:CreateSection("Welcome")
+Home:CreateLabel({ Text = "Welcome to WinUI – Windows 10 inspired library" })
+Home:CreateParagraph({
+    Title = "About",
+    Content = "This library follows Windows 10 visual language with a Rayfield-style API."
+})
+```
+---
+
+```lua
+local Window = MacUI:CreateWindow({ Name = "Example", Subtitle = "MacUI Demo", Theme = "Dark", Acrylic = true })
+```
+---
+
 # Button
 ---
 ```lua
