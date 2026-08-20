@@ -3,6 +3,8 @@
     Architecture inspired by Rayfield Gen2 style API
     Visual language: Windows 10 (Settings, title bar, Metro/Fluent controls)
     Pure Luau • Modular • Production-oriented
+
+    v1.1.0 – Fixed icons, expanded themes, tab selection, theme apply, CoreGui fallback
 ]]
 
 local WinUI = {}
@@ -23,7 +25,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 -- Constants
 local ACCENT_DEFAULT = Color3.fromRGB(0, 120, 215)
 local LIBRARY_NAME = "WinUI"
-local VERSION = "1.0.0"
+local VERSION = "1.1.0"
 
 -- Utility
 local function safeCall(fn, ...)
@@ -76,6 +78,19 @@ local function tween(obj, props, duration, style, dir)
     return t
 end
 
+-- Safe parent for ScreenGuis (CoreGui may be restricted)
+local function getGuiParent()
+    local ok = pcall(function()
+        local test = Instance.new("Folder")
+        test.Parent = CoreGui
+        test:Destroy()
+    end)
+    if ok then
+        return CoreGui
+    end
+    return PlayerGui
+end
+
 -- Theme Engine
 local Themes = {
     Windows10 = {
@@ -97,6 +112,7 @@ local Themes = {
         NotificationBackground = Color3.fromRGB(45, 45, 45),
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(255, 255, 255),
     },
     Windows10Dark = {
         Name = "Windows10Dark",
@@ -117,6 +133,7 @@ local Themes = {
         NotificationBackground = Color3.fromRGB(40, 40, 40),
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(45, 45, 45),
     },
     Windows10Light = {
         Name = "Windows10Light",
@@ -137,6 +154,7 @@ local Themes = {
         NotificationBackground = Color3.fromRGB(50, 50, 50),
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(255, 255, 255),
     },
     Blue = {
         Name = "Blue",
@@ -157,6 +175,7 @@ local Themes = {
         NotificationBackground = Color3.fromRGB(35, 35, 40),
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(40, 40, 45),
     },
     Gray = {
         Name = "Gray",
@@ -177,30 +196,155 @@ local Themes = {
         NotificationBackground = Color3.fromRGB(45, 45, 45),
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(50, 50, 50),
+    },
+    -- Extra themes
+    DarkBlue = {
+        Name = "DarkBlue",
+        Accent = Color3.fromRGB(0, 153, 255),
+        Background = Color3.fromRGB(18, 22, 32),
+        SecondaryBackground = Color3.fromRGB(28, 34, 48),
+        Sidebar = Color3.fromRGB(14, 18, 28),
+        TitleBar = Color3.fromRGB(22, 28, 40),
+        Text = Color3.fromRGB(240, 244, 255),
+        TextSecondary = Color3.fromRGB(150, 160, 185),
+        Border = Color3.fromRGB(45, 55, 75),
+        Hover = Color3.fromRGB(255, 255, 255),
+        HoverTransparency = 0.9,
+        Selected = Color3.fromRGB(0, 153, 255),
+        ToggleOn = Color3.fromRGB(0, 153, 255),
+        ToggleOff = Color3.fromRGB(70, 80, 100),
+        InputBackground = Color3.fromRGB(32, 40, 55),
+        NotificationBackground = Color3.fromRGB(24, 30, 42),
+        NotificationText = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(28, 34, 48),
+    },
+    Purple = {
+        Name = "Purple",
+        Accent = Color3.fromRGB(136, 23, 152),
+        Background = Color3.fromRGB(30, 28, 36),
+        SecondaryBackground = Color3.fromRGB(42, 38, 52),
+        Sidebar = Color3.fromRGB(24, 22, 30),
+        TitleBar = Color3.fromRGB(30, 28, 36),
+        Text = Color3.fromRGB(245, 240, 255),
+        TextSecondary = Color3.fromRGB(170, 160, 190),
+        Border = Color3.fromRGB(60, 55, 75),
+        Hover = Color3.fromRGB(255, 255, 255),
+        HoverTransparency = 0.9,
+        Selected = Color3.fromRGB(136, 23, 152),
+        ToggleOn = Color3.fromRGB(136, 23, 152),
+        ToggleOff = Color3.fromRGB(90, 85, 105),
+        InputBackground = Color3.fromRGB(48, 44, 58),
+        NotificationBackground = Color3.fromRGB(36, 32, 44),
+        NotificationText = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(42, 38, 52),
+    },
+    Green = {
+        Name = "Green",
+        Accent = Color3.fromRGB(16, 137, 62),
+        Background = Color3.fromRGB(28, 32, 28),
+        SecondaryBackground = Color3.fromRGB(38, 44, 38),
+        Sidebar = Color3.fromRGB(22, 26, 22),
+        TitleBar = Color3.fromRGB(28, 32, 28),
+        Text = Color3.fromRGB(240, 255, 245),
+        TextSecondary = Color3.fromRGB(160, 180, 165),
+        Border = Color3.fromRGB(55, 70, 58),
+        Hover = Color3.fromRGB(255, 255, 255),
+        HoverTransparency = 0.9,
+        Selected = Color3.fromRGB(16, 137, 62),
+        ToggleOn = Color3.fromRGB(16, 137, 62),
+        ToggleOff = Color3.fromRGB(80, 95, 85),
+        InputBackground = Color3.fromRGB(44, 52, 44),
+        NotificationBackground = Color3.fromRGB(32, 38, 32),
+        NotificationText = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(38, 44, 38),
+    },
+    Orange = {
+        Name = "Orange",
+        Accent = Color3.fromRGB(247, 99, 12),
+        Background = Color3.fromRGB(36, 30, 26),
+        SecondaryBackground = Color3.fromRGB(48, 40, 34),
+        Sidebar = Color3.fromRGB(28, 24, 20),
+        TitleBar = Color3.fromRGB(36, 30, 26),
+        Text = Color3.fromRGB(255, 248, 240),
+        TextSecondary = Color3.fromRGB(190, 170, 150),
+        Border = Color3.fromRGB(70, 58, 48),
+        Hover = Color3.fromRGB(255, 255, 255),
+        HoverTransparency = 0.9,
+        Selected = Color3.fromRGB(247, 99, 12),
+        ToggleOn = Color3.fromRGB(247, 99, 12),
+        ToggleOff = Color3.fromRGB(100, 85, 70),
+        InputBackground = Color3.fromRGB(54, 46, 40),
+        NotificationBackground = Color3.fromRGB(40, 34, 28),
+        NotificationText = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(48, 40, 34),
+    },
+    FluentDark = {
+        Name = "FluentDark",
+        Accent = Color3.fromRGB(96, 205, 255),
+        Background = Color3.fromRGB(32, 32, 32),
+        SecondaryBackground = Color3.fromRGB(44, 44, 44),
+        Sidebar = Color3.fromRGB(26, 26, 26),
+        TitleBar = Color3.fromRGB(32, 32, 32),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextSecondary = Color3.fromRGB(200, 200, 200),
+        Border = Color3.fromRGB(58, 58, 58),
+        Hover = Color3.fromRGB(255, 255, 255),
+        HoverTransparency = 0.9,
+        Selected = Color3.fromRGB(96, 205, 255),
+        ToggleOn = Color3.fromRGB(96, 205, 255),
+        ToggleOff = Color3.fromRGB(100, 100, 100),
+        InputBackground = Color3.fromRGB(52, 52, 52),
+        NotificationBackground = Color3.fromRGB(40, 40, 40),
+        NotificationText = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(0, 0, 0),
+        StatusBar = Color3.fromRGB(44, 44, 44),
     },
 }
 
 local CurrentTheme = deepCopy(Themes.Windows10)
 local AccentColor = ACCENT_DEFAULT
 
-local function applyThemeToElement(element, themeKey)
-    -- Helper used by components to react to theme changes
-end
-
--- Icon fallbacks (simple unicode / asset ids)
+-- Lucide icon asset IDs (reliable, widely used in Roblox UI libs)
 local Icons = {
-    home = "rbxassetid://7733960981",
-    settings = "rbxassetid://7734053495",
-    player = "rbxassetid://7733774602",
-    visual = "rbxassetid://7733995152",
-    combat = "rbxassetid://7733911828",
-    misc = "rbxassetid://7734056607",
-    about = "rbxassetid://7733661768",
-    search = "rbxassetid://7734057141",
-    close = "rbxassetid://7733715400",
-    minimize = "rbxassetid://7733718339",
-    maximize = "rbxassetid://7733718339",
+    home     = "rbxassetid://10723407389",
+    settings = "rbxassetid://10734950309",
+    player   = "rbxassetid://10747373176",
+    user     = "rbxassetid://10747373176",
+    visual   = "rbxassetid://10723346959",
+    eye      = "rbxassetid://10723346959",
+    combat   = "rbxassetid://10734975486",
+    sword    = "rbxassetid://10734975486",
+    misc     = "rbxassetid://10709782497",
+    box      = "rbxassetid://10709782497",
+    about    = "rbxassetid://10723415903",
+    info     = "rbxassetid://10723415903",
+    search   = "rbxassetid://10734943674",
+    close    = "rbxassetid://10747384394",
+    x        = "rbxassetid://10747384394",
+    minimize = "rbxassetid://10734895698",
+    maximize = "rbxassetid://10734886735",
+    minus    = "rbxassetid://10734896206",
+    menu     = "rbxassetid://10734886735",
+    cog      = "rbxassetid://10709810948",
+    users    = "rbxassetid://10747373426",
+    swords   = "rbxassetid://10734975692",
 }
+
+local function resolveIcon(name)
+    if not name or name == "" then
+        return Icons.home
+    end
+    if typeof(name) == "string" and (string.find(name, "rbxassetid://") or string.find(name, "rbxasset://")) then
+        return name
+    end
+    local key = string.lower(tostring(name))
+    return Icons[key] or Icons.home
+end
 
 -- Global state
 local Windows = {}
@@ -212,13 +356,15 @@ local IsMobile = UserInputService.TouchEnabled and not UserInputService.Keyboard
 -- Notification system
 local NotificationContainer
 local function ensureNotificationContainer()
-    if NotificationContainer and NotificationContainer.Parent then return NotificationContainer end
+    if NotificationContainer and NotificationContainer.Parent then
+        return NotificationContainer
+    end
     NotificationContainer = create("ScreenGui", {
         Name = "WinUI_Notifications",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 999,
-        Parent = CoreGui,
+        Parent = getGuiParent(),
     })
     local holder = create("Frame", {
         Name = "Holder",
@@ -228,7 +374,7 @@ local function ensureNotificationContainer()
         AnchorPoint = Vector2.new(0, 0),
         Parent = NotificationContainer,
     })
-    local layout = create("UIListLayout", {
+    create("UIListLayout", {
         Padding = UDim.new(0, 8),
         HorizontalAlignment = Enum.HorizontalAlignment.Right,
         VerticalAlignment = Enum.VerticalAlignment.Bottom,
@@ -257,11 +403,11 @@ function WinUI:Notify(opts)
         Name = "Notification",
         BackgroundColor3 = CurrentTheme.NotificationBackground,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 320, 0, 0),
+        Size = UDim2.new(0, 320, 0, 70),
         ClipsDescendants = true,
         Parent = holder,
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = notif })
+    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = notif })
     create("UIStroke", {
         Color = CurrentTheme.Border,
         Thickness = 1,
@@ -269,17 +415,29 @@ function WinUI:Notify(opts)
         Parent = notif,
     })
 
-    local accentBar = create("Frame", {
+    create("Frame", {
         BackgroundColor3 = AccentColor,
         BorderSizePixel = 0,
         Size = UDim2.new(0, 4, 1, 0),
         Parent = notif,
     })
 
+    if icon then
+        create("ImageLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(0, 14, 0, 10),
+            Image = resolveIcon(icon),
+            ImageColor3 = CurrentTheme.NotificationText,
+            Parent = notif,
+        })
+    end
+
+    local titleOffset = icon and 40 or 16
     local titleLabel = create("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 16, 0, 10),
-        Size = UDim2.new(1, -50, 0, 20),
+        Position = UDim2.new(0, titleOffset, 0, 10),
+        Size = UDim2.new(1, -titleOffset - 30, 0, 20),
         Font = Enum.Font.GothamSemibold,
         Text = title,
         TextColor3 = CurrentTheme.NotificationText,
@@ -291,7 +449,8 @@ function WinUI:Notify(opts)
     local contentLabel = create("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.new(0, 16, 0, 32),
-        Size = UDim2.new(1, -30, 0, 40),
+        Size = UDim2.new(1, -30, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
         Font = Enum.Font.Gotham,
         Text = content,
         TextColor3 = CurrentTheme.NotificationText,
@@ -313,12 +472,13 @@ function WinUI:Notify(opts)
         Parent = notif,
     })
 
-    -- Size calculation
-    local textBounds = contentLabel.TextBounds
-    local height = math.max(70, 42 + textBounds.Y + 12)
-    notif.Size = UDim2.new(0, 320, 0, height)
+    -- Proper size after layout
+    task.defer(function()
+        if not notif or not notif.Parent then return end
+        local h = math.max(70, 42 + contentLabel.TextBounds.Y + 14)
+        notif.Size = UDim2.new(0, 320, 0, h)
+    end)
 
-    -- Slide in
     notif.Position = UDim2.new(1, 20, 0, 0)
     tween(notif, { Position = UDim2.new(0, 0, 0, 0) }, 0.25, Enum.EasingStyle.Quart)
 
@@ -347,7 +507,6 @@ local function getConfigPath(folder, file)
 end
 
 function WinUI:SaveConfiguration()
-    -- Uses writefile if available (executor environment)
     if not writefile then
         warn("[WinUI] writefile not available – configuration not saved")
         return
@@ -381,7 +540,6 @@ function WinUI:LoadConfiguration()
                     local ok2, data = pcall(HttpService.JSONDecode, HttpService, content)
                     if ok2 and type(data) == "table" then
                         window.ConfigValues = data
-                        -- Apply later when components are created / or expose ApplyConfig
                     end
                 end
             end
@@ -393,12 +551,16 @@ end
 function WinUI:SetTheme(themeName)
     local theme = Themes[themeName]
     if not theme then
-        warn("[WinUI] Invalid theme:", themeName)
+        warn("[WinUI] Invalid theme:", themeName, "– available:", table.concat((function()
+            local names = {}
+            for k in pairs(Themes) do table.insert(names, k) end
+            table.sort(names)
+            return names
+        end)(), ", "))
         return
     end
     CurrentTheme = deepCopy(theme)
     AccentColor = CurrentTheme.Accent
-    -- Broadcast theme change to open windows
     for _, window in pairs(Windows) do
         if window.ApplyTheme then
             window:ApplyTheme()
@@ -426,6 +588,19 @@ function WinUI:GetTheme()
     return CurrentTheme
 end
 
+function WinUI:GetThemes()
+    local names = {}
+    for k in pairs(Themes) do
+        table.insert(names, k)
+    end
+    table.sort(names)
+    return names
+end
+
+function WinUI:GetIcons()
+    return Icons
+end
+
 -- Main Window Creator
 function WinUI:CreateWindow(options)
     options = options or {}
@@ -451,21 +626,22 @@ function WinUI:CreateWindow(options)
         Visible = true,
         Minimized = false,
         Connections = {},
+        ThemeElements = {}, -- track elements for full theme reapply
     }
     setmetatable(window, { __index = WinUI })
 
-    -- ScreenGui
+    local guiParent = getGuiParent()
+
     local screenGui = create("ScreenGui", {
         Name = "WinUI_" .. name,
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = 100,
         IgnoreGuiInset = true,
-        Parent = CoreGui,
+        Parent = guiParent,
     })
     window.ScreenGui = screenGui
 
-    -- Main Frame (Windows 10 window)
     local mainSize = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 720, 0, 480)
     local main = create("Frame", {
         Name = "Main",
@@ -478,15 +654,14 @@ function WinUI:CreateWindow(options)
         Parent = screenGui,
     })
     window.Main = main
-    create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = main }) -- almost square
-    create("UIStroke", {
+    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = main })
+    local mainStroke = create("UIStroke", {
         Color = CurrentTheme.Border,
         Thickness = 1,
         Parent = main,
     })
 
-    -- Shadow (subtle)
-    local shadow = create("ImageLabel", {
+    create("ImageLabel", {
         Name = "Shadow",
         BackgroundTransparency = 1,
         Image = "rbxassetid://6015897843",
@@ -501,7 +676,7 @@ function WinUI:CreateWindow(options)
         Parent = main,
     })
 
-    -- Title Bar (Windows 10 style)
+    -- Title Bar
     local titleBar = create("Frame", {
         Name = "TitleBar",
         BackgroundColor3 = CurrentTheme.TitleBar,
@@ -524,7 +699,6 @@ function WinUI:CreateWindow(options)
     })
     window.TitleText = titleText
 
-    -- Window controls (Minimize, Maximize, Close) – Windows 10 style, not macOS
     local controls = create("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(0, 138, 1, 0),
@@ -583,14 +757,13 @@ function WinUI:CreateWindow(options)
             dragging = false
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
+    table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
-    end)
+    end))
 
-    -- Minimize / Close
     minBtn.MouseButton1Click:Connect(function()
         window.Minimized = not window.Minimized
         if window.Minimized then
@@ -605,7 +778,6 @@ function WinUI:CreateWindow(options)
     end)
 
     maxBtn.MouseButton1Click:Connect(function()
-        -- Simple maximize toggle
         if main.Size.X.Scale > 0.9 then
             tween(main, { Size = mainSize, Position = UDim2.new(0.5, 0, 0.5, 0) }, 0.2)
         else
@@ -622,7 +794,6 @@ function WinUI:CreateWindow(options)
         Parent = main,
     })
 
-    -- Sidebar (Windows 10 Settings style)
     local sidebarWidth = IsMobile and 0 or 180
     local sidebar = create("Frame", {
         Name = "Sidebar",
@@ -633,7 +804,7 @@ function WinUI:CreateWindow(options)
     })
     window.Sidebar = sidebar
 
-    local sidebarLayout = create("UIListLayout", {
+    create("UIListLayout", {
         Padding = UDim.new(0, 2),
         SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = sidebar,
@@ -645,7 +816,6 @@ function WinUI:CreateWindow(options)
         Parent = sidebar,
     })
 
-    -- Content area
     local content = create("Frame", {
         Name = "Content",
         BackgroundColor3 = CurrentTheme.Background,
@@ -685,28 +855,26 @@ function WinUI:CreateWindow(options)
         contentScroll.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 24)
     end)
 
-    -- Status bar
     local statusBar = create("Frame", {
         Name = "StatusBar",
-        BackgroundColor3 = CurrentTheme.SecondaryBackground,
+        BackgroundColor3 = CurrentTheme.StatusBar or CurrentTheme.SecondaryBackground,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 24),
         Position = UDim2.new(0, 0, 1, -24),
         Parent = main,
     })
-    create("TextLabel", {
+    local statusLabel = create("TextLabel", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -20, 1, 0),
         Position = UDim2.new(0, 10, 0, 0),
         Font = Enum.Font.Gotham,
-        Text = name .. " • Windows 10",
+        Text = name .. " • " .. VERSION,
         TextColor3 = CurrentTheme.TextSecondary,
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = statusBar,
     })
 
-    -- Mobile toggle for sidebar
     if IsMobile then
         local mobileToggle = create("TextButton", {
             Name = "MobileNav",
@@ -719,7 +887,7 @@ function WinUI:CreateWindow(options)
             Font = Enum.Font.GothamBold,
             Parent = main,
         })
-        create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = mobileToggle })
+        create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = mobileToggle })
         local sidebarOpen = false
         mobileToggle.MouseButton1Click:Connect(function()
             sidebarOpen = not sidebarOpen
@@ -735,25 +903,36 @@ function WinUI:CreateWindow(options)
         end)
     end
 
-    -- Apply theme function
     function window:ApplyTheme()
         main.BackgroundColor3 = CurrentTheme.Background
+        mainStroke.Color = CurrentTheme.Border
         titleBar.BackgroundColor3 = CurrentTheme.TitleBar
         titleText.TextColor3 = CurrentTheme.Text
         sidebar.BackgroundColor3 = CurrentTheme.Sidebar
         content.BackgroundColor3 = CurrentTheme.Background
-        statusBar.BackgroundColor3 = CurrentTheme.SecondaryBackground
-        -- Components will re-apply on next interaction or we can iterate
+        statusBar.BackgroundColor3 = CurrentTheme.StatusBar or CurrentTheme.SecondaryBackground
+        statusLabel.TextColor3 = CurrentTheme.TextSecondary
+        contentScroll.ScrollBarImageColor3 = AccentColor
+
+        for _, tab in ipairs(window.Tabs) do
+            if tab.Icon then
+                tab.Icon.ImageColor3 = (window.CurrentTab == tab) and AccentColor or CurrentTheme.TextSecondary
+            end
+            if tab.Label then
+                tab.Label.TextColor3 = (window.CurrentTab == tab) and AccentColor or CurrentTheme.Text
+            end
+            if tab.Indicator then
+                tab.Indicator.BackgroundColor3 = AccentColor
+            end
+        end
     end
 
-    -- Toggle visibility
     function window:Toggle()
         window.Visible = not window.Visible
         main.Visible = window.Visible
     end
 
-    -- Keybind for toggle (default RightControl)
-    local toggleKey = Enum.KeyCode.RightControl
+    local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
     table.insert(window.Connections, UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         if input.KeyCode == toggleKey then
@@ -771,7 +950,6 @@ function WinUI:CreateWindow(options)
             Container = nil,
         }
 
-        -- Sidebar item
         local item = create("TextButton", {
             Name = tabName,
             BackgroundTransparency = 1,
@@ -780,6 +958,7 @@ function WinUI:CreateWindow(options)
             Parent = sidebar,
         })
         local indicator = create("Frame", {
+            Name = "Indicator",
             BackgroundColor3 = AccentColor,
             BorderSizePixel = 0,
             Size = UDim2.new(0, 3, 0.6, 0),
@@ -791,7 +970,7 @@ function WinUI:CreateWindow(options)
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 18, 0, 18),
             Position = UDim2.new(0, 12, 0.5, -9),
-            Image = Icons[iconName] or Icons.home,
+            Image = resolveIcon(iconName),
             ImageColor3 = CurrentTheme.TextSecondary,
             Parent = item,
         })
@@ -808,6 +987,7 @@ function WinUI:CreateWindow(options)
         })
 
         local hoverFrame = create("Frame", {
+            Name = "Hover",
             BackgroundColor3 = CurrentTheme.Hover,
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 1, 0),
@@ -824,7 +1004,6 @@ function WinUI:CreateWindow(options)
             hoverFrame.BackgroundTransparency = 1
         end)
 
-        -- Content container for this tab
         local container = create("Frame", {
             Name = tabName .. "_Content",
             BackgroundTransparency = 1,
@@ -844,27 +1023,33 @@ function WinUI:CreateWindow(options)
         tab.Layout = contLayout
 
         local function selectTab()
-            if window.CurrentTab then
-                window.CurrentTab.Container.Visible = false
-                -- reset previous indicator
-            end
-            for _, t in pairs(window.Tabs) do
-                local ind = t.Item and t.Item:FindFirstChildOfClass("Frame")
-                if ind and ind.Name ~= "Hover" then
-                    -- simple: hide all indicators
+            -- Deselect previous
+            if window.CurrentTab and window.CurrentTab ~= tab then
+                local prev = window.CurrentTab
+                if prev.Container then
+                    prev.Container.Visible = false
+                end
+                if prev.Indicator then
+                    prev.Indicator.Visible = false
+                end
+                if prev.Icon then
+                    prev.Icon.ImageColor3 = CurrentTheme.TextSecondary
+                end
+                if prev.Label then
+                    prev.Label.TextColor3 = CurrentTheme.Text
                 end
             end
+
             indicator.Visible = true
             icon.ImageColor3 = AccentColor
             label.TextColor3 = AccentColor
             container.Visible = true
             window.CurrentTab = tab
-            tab.Item = item
+            hoverFrame.BackgroundTransparency = 1
         end
 
         item.MouseButton1Click:Connect(selectTab)
 
-        -- Auto select first tab
         if #window.Tabs == 0 then
             task.defer(selectTab)
         end
@@ -875,7 +1060,7 @@ function WinUI:CreateWindow(options)
         tab.Icon = icon
         tab.Label = label
 
-        -- Component creators attached to tab
+        -- Components
         function tab:CreateSection(text)
             local section = create("Frame", {
                 BackgroundTransparency = 1,
@@ -923,7 +1108,7 @@ function WinUI:CreateWindow(options)
                 Size = UDim2.new(1, 0, 0, 0),
                 Parent = container,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = para })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = para })
             create("UIPadding", {
                 PaddingTop = UDim.new(0, 10),
                 PaddingBottom = UDim.new(0, 10),
@@ -931,7 +1116,7 @@ function WinUI:CreateWindow(options)
                 PaddingRight = UDim.new(0, 12),
                 Parent = para,
             })
-            local title = create("TextLabel", {
+            create("TextLabel", {
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, 0, 0, 18),
                 Font = Enum.Font.GothamSemibold,
@@ -944,7 +1129,8 @@ function WinUI:CreateWindow(options)
             local contentLbl = create("TextLabel", {
                 BackgroundTransparency = 1,
                 Position = UDim2.new(0, 0, 0, 22),
-                Size = UDim2.new(1, 0, 0, 40),
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
                 Font = Enum.Font.Gotham,
                 Text = opts.Content or "",
                 TextColor3 = CurrentTheme.TextSecondary,
@@ -956,16 +1142,16 @@ function WinUI:CreateWindow(options)
             })
             local function updateSize()
                 local h = 32 + contentLbl.TextBounds.Y
-                para.Size = UDim2.new(1, 0, 0, h)
+                para.Size = UDim2.new(1, 0, 0, math.max(50, h))
             end
             contentLbl:GetPropertyChangedSignal("TextBounds"):Connect(updateSize)
-            updateSize()
+            task.defer(updateSize)
             return para
         end
 
         function tab:CreateButton(opts)
             opts = opts or {}
-            local name = opts.Name or "Button"
+            local btnName = opts.Name or "Button"
             local desc = opts.Description
             local callback = opts.Callback or function() end
 
@@ -978,7 +1164,7 @@ function WinUI:CreateWindow(options)
                 AutoButtonColor = false,
                 Parent = container,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = btn })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = btn })
             create("UIStroke", {
                 Color = CurrentTheme.Border,
                 Thickness = 1,
@@ -990,7 +1176,7 @@ function WinUI:CreateWindow(options)
                 Position = UDim2.new(0, 12, 0, desc and 6 or 0),
                 Size = UDim2.new(1, -24, 0, 20),
                 Font = Enum.Font.GothamSemibold,
-                Text = name,
+                Text = btnName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1032,10 +1218,10 @@ function WinUI:CreateWindow(options)
 
         function tab:CreateToggle(opts)
             opts = opts or {}
-            local name = opts.Name or "Toggle"
+            local tName = opts.Name or "Toggle"
             local current = opts.CurrentValue or false
             local callback = opts.Callback or function() end
-            local flag = opts.Flag or name
+            local flag = opts.Flag or tName
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
@@ -1046,14 +1232,13 @@ function WinUI:CreateWindow(options)
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, -60, 1, 0),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = tName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = frame,
             })
 
-            -- Windows 10 style toggle
             local track = create("Frame", {
                 BackgroundColor3 = current and AccentColor or CurrentTheme.ToggleOff,
                 Size = UDim2.new(0, 40, 0, 20),
@@ -1087,7 +1272,6 @@ function WinUI:CreateWindow(options)
                 set(not current)
             end)
 
-            -- Load config if present
             if window.ConfigValues[flag] ~= nil then
                 set(window.ConfigValues[flag])
             end
@@ -1097,12 +1281,12 @@ function WinUI:CreateWindow(options)
 
         function tab:CreateSlider(opts)
             opts = opts or {}
-            local name = opts.Name or "Slider"
+            local sName = opts.Name or "Slider"
             local range = opts.Range or { 0, 100 }
             local increment = opts.Increment or 1
             local current = opts.CurrentValue or range[1]
             local callback = opts.Callback or function() end
-            local flag = opts.Flag or name
+            local flag = opts.Flag or sName
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
@@ -1113,7 +1297,7 @@ function WinUI:CreateWindow(options)
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, -60, 0, 20),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = sName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1140,14 +1324,14 @@ function WinUI:CreateWindow(options)
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = track })
             local fill = create("Frame", {
                 BackgroundColor3 = AccentColor,
-                Size = UDim2.new((current - range[1]) / (range[2] - range[1]), 0, 1, 0),
+                Size = UDim2.new((current - range[1]) / math.max(range[2] - range[1], 1), 0, 1, 0),
                 Parent = track,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = fill })
             local knob = create("Frame", {
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 Size = UDim2.new(0, 14, 0, 14),
-                Position = UDim2.new((current - range[1]) / (range[2] - range[1]), -7, 0.5, -7),
+                Position = UDim2.new((current - range[1]) / math.max(range[2] - range[1], 1), -7, 0.5, -7),
                 Parent = track,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = knob })
@@ -1158,38 +1342,36 @@ function WinUI:CreateWindow(options)
                 val = clamp(math.floor(val / increment + 0.5) * increment, range[1], range[2])
                 current = val
                 window.ConfigValues[flag] = val
-                local pct = (val - range[1]) / (range[2] - range[1])
+                local pct = (val - range[1]) / math.max(range[2] - range[1], 1)
                 fill.Size = UDim2.new(pct, 0, 1, 0)
                 knob.Position = UDim2.new(pct, -7, 0.5, -7)
                 valueLbl.Text = tostring(val)
                 safeCall(callback, val)
             end
 
+            local function onInput(input)
+                local rel = (input.Position.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1)
+                update(range[1] + rel * (range[2] - range[1]))
+            end
+
             track.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     sliding = true
+                    onInput(input)
                 end
             end)
-            UserInputService.InputEnded:Connect(function(input)
+            table.insert(window.Connections, UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     sliding = false
                 end
-            end)
-            UserInputService.InputChanged:Connect(function(input)
+            end))
+            table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
                 if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local rel = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
-                    local val = range[1] + rel * (range[2] - range[1])
-                    update(val)
+                    onInput(input)
                 end
-            end)
-            track.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local rel = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
-                    update(range[1] + rel * (range[2] - range[1]))
-                end
-            end)
+            end))
 
-            if window.ConfigValues[flag] then
+            if window.ConfigValues[flag] ~= nil then
                 update(window.ConfigValues[flag])
             end
             return { Set = update, Get = function() return current end }
@@ -1197,11 +1379,11 @@ function WinUI:CreateWindow(options)
 
         function tab:CreateDropdown(opts)
             opts = opts or {}
-            local name = opts.Name or "Dropdown"
+            local dName = opts.Name or "Dropdown"
             local optionsList = opts.Options or { "Option 1" }
             local current = opts.CurrentOption or optionsList[1]
             local callback = opts.Callback or function() end
-            local flag = opts.Flag or name
+            local flag = opts.Flag or dName
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
@@ -1213,7 +1395,7 @@ function WinUI:CreateWindow(options)
                 BackgroundTransparency = 1,
                 Size = UDim2.new(0.45, 0, 1, 0),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = dName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1224,14 +1406,14 @@ function WinUI:CreateWindow(options)
                 BackgroundColor3 = CurrentTheme.InputBackground,
                 Size = UDim2.new(0.5, 0, 0, 28),
                 Position = UDim2.new(0.5, 0, 0.5, -14),
-                Text = current .. "  ▼",
+                Text = tostring(current) .. "  ▼",
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 12,
                 Font = Enum.Font.Gotham,
                 AutoButtonColor = false,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = dropBtn })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = dropBtn })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = dropBtn })
 
             local open = false
@@ -1239,6 +1421,7 @@ function WinUI:CreateWindow(options)
             dropBtn.MouseButton1Click:Connect(function()
                 open = not open
                 if open then
+                    if listFrame then listFrame:Destroy() end
                     listFrame = create("Frame", {
                         BackgroundColor3 = CurrentTheme.SecondaryBackground,
                         Size = UDim2.new(0.5, 0, 0, math.min(#optionsList * 28, 140)),
@@ -1246,22 +1429,23 @@ function WinUI:CreateWindow(options)
                         ZIndex = 50,
                         Parent = frame,
                     })
-                    create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = listFrame })
+                    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = listFrame })
                     create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = listFrame })
-                    local layout = create("UIListLayout", { Parent = listFrame })
+                    create("UIListLayout", { Parent = listFrame })
                     for _, opt in ipairs(optionsList) do
                         local optBtn = create("TextButton", {
                             BackgroundTransparency = 1,
                             Size = UDim2.new(1, 0, 0, 28),
-                            Text = "  " .. opt,
+                            Text = "  " .. tostring(opt),
                             TextColor3 = CurrentTheme.Text,
                             TextSize = 12,
                             Font = Enum.Font.Gotham,
                             TextXAlignment = Enum.TextXAlignment.Left,
+                            ZIndex = 51,
                             Parent = listFrame,
                         })
                         optBtn.MouseEnter:Connect(function()
-                            optBtn.BackgroundTransparency = 0.9
+                            optBtn.BackgroundTransparency = 0.85
                             optBtn.BackgroundColor3 = AccentColor
                         end)
                         optBtn.MouseLeave:Connect(function()
@@ -1270,9 +1454,9 @@ function WinUI:CreateWindow(options)
                         optBtn.MouseButton1Click:Connect(function()
                             current = opt
                             window.ConfigValues[flag] = opt
-                            dropBtn.Text = current .. "  ▼"
+                            dropBtn.Text = tostring(current) .. "  ▼"
                             safeCall(callback, opt)
-                            listFrame:Destroy()
+                            if listFrame then listFrame:Destroy() end
                             open = false
                         end)
                     end
@@ -1280,15 +1464,28 @@ function WinUI:CreateWindow(options)
                     if listFrame then listFrame:Destroy() end
                 end
             end)
-            return { Set = function(v) current = v; dropBtn.Text = v .. "  ▼" end }
+
+            if window.ConfigValues[flag] ~= nil then
+                current = window.ConfigValues[flag]
+                dropBtn.Text = tostring(current) .. "  ▼"
+            end
+
+            return {
+                Set = function(v)
+                    current = v
+                    dropBtn.Text = tostring(v) .. "  ▼"
+                    window.ConfigValues[flag] = v
+                end,
+                Get = function() return current end,
+            }
         end
 
         function tab:CreateInput(opts)
             opts = opts or {}
-            local name = opts.Name or "Input"
+            local iName = opts.Name or "Input"
             local placeholder = opts.PlaceholderText or "Enter text..."
             local callback = opts.Callback or function() end
-            local flag = opts.Flag or name
+            local flag = opts.Flag or iName
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
@@ -1299,7 +1496,7 @@ function WinUI:CreateWindow(options)
                 BackgroundTransparency = 1,
                 Size = UDim2.new(0.4, 0, 1, 0),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = iName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1318,11 +1515,11 @@ function WinUI:CreateWindow(options)
                 ClearTextOnFocus = false,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = box })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = box })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = box })
             create("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = box })
 
-            box.FocusLost:Connect(function(enter)
+            box.FocusLost:Connect(function()
                 window.ConfigValues[flag] = box.Text
                 safeCall(callback, box.Text)
             end)
@@ -1331,7 +1528,7 @@ function WinUI:CreateWindow(options)
 
         function tab:CreateKeybind(opts)
             opts = opts or {}
-            local name = opts.Name or "Keybind"
+            local kName = opts.Name or "Keybind"
             local current = opts.CurrentKeybind or Enum.KeyCode.RightControl
             local callback = opts.Callback or function() end
 
@@ -1344,7 +1541,7 @@ function WinUI:CreateWindow(options)
                 BackgroundTransparency = 1,
                 Size = UDim2.new(0.5, 0, 1, 0),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = kName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1360,7 +1557,7 @@ function WinUI:CreateWindow(options)
                 Font = Enum.Font.Gotham,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = keyBtn })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = keyBtn })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = keyBtn })
 
             local listening = false
@@ -1373,15 +1570,15 @@ function WinUI:CreateWindow(options)
                     current = input.KeyCode
                     keyBtn.Text = current.Name
                     listening = false
-                    safeCall(callback)
+                    safeCall(callback, current)
                 end
             end))
-            return { Get = function() return current end }
+            return { Get = function() return current end, Set = function(k) current = k; keyBtn.Text = k.Name end }
         end
 
         function tab:CreateColorPicker(opts)
             opts = opts or {}
-            local name = opts.Name or "Color"
+            local cName = opts.Name or "Color"
             local color = opts.Color or AccentColor
             local callback = opts.Callback or function() end
 
@@ -1392,9 +1589,9 @@ function WinUI:CreateWindow(options)
             })
             create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(0.5, 0, 1, 0),
+                Size = UDim2.new(0.5, 1, 0),
                 Font = Enum.Font.Gotham,
-                Text = name,
+                Text = cName,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -1407,10 +1604,9 @@ function WinUI:CreateWindow(options)
                 Text = "",
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = preview })
+            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = preview })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = preview })
 
-            -- Simplified: clicking cycles common Windows accent colors
             local accents = {
                 Color3.fromRGB(0, 120, 215),
                 Color3.fromRGB(18, 140, 42),
@@ -1418,29 +1614,38 @@ function WinUI:CreateWindow(options)
                 Color3.fromRGB(136, 23, 152),
                 Color3.fromRGB(247, 99, 12),
                 Color3.fromRGB(0, 153, 188),
+                Color3.fromRGB(96, 205, 255),
+                Color3.fromRGB(120, 120, 120),
             }
             local idx = 1
+            for i, c in ipairs(accents) do
+                if c == color then idx = i break end
+            end
             preview.MouseButton1Click:Connect(function()
                 idx = idx % #accents + 1
                 color = accents[idx]
                 preview.BackgroundColor3 = color
                 safeCall(callback, color)
             end)
-            return { Set = function(c) color = c; preview.BackgroundColor3 = c end }
+            return {
+                Set = function(c)
+                    color = c
+                    preview.BackgroundColor3 = c
+                end,
+                Get = function() return color end,
+            }
         end
 
         return tab
     end
 
-    -- Search (simple)
     function window:CreateSearch()
         local searchFrame = create("Frame", {
             BackgroundColor3 = CurrentTheme.InputBackground,
-            Size = UDim2.new(1, -20, 0, 28),
-            Position = UDim2.new(0, 10, 0, 8),
+            Size = UDim2.new(1, -12, 0, 28),
             Parent = sidebar,
         })
-        create("UICorner", { CornerRadius = UDim.new(0, 2), Parent = searchFrame })
+        create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = searchFrame })
         create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = searchFrame })
         local box = create("TextBox", {
             BackgroundTransparency = 1,
@@ -1454,7 +1659,6 @@ function WinUI:CreateWindow(options)
             TextSize = 12,
             Parent = searchFrame,
         })
-        -- Basic filter can be expanded
         return box
     end
 
@@ -1477,7 +1681,6 @@ function WinUI:CreateWindow(options)
 
     Windows[windowId] = window
 
-    -- Loading overlay (simple)
     if options.LoadingTitle then
         local loading = create("Frame", {
             BackgroundColor3 = CurrentTheme.Background,
@@ -1508,12 +1711,13 @@ function WinUI:CreateWindow(options)
         task.delay(1.2, function()
             tween(loading, { BackgroundTransparency = 1 }, 0.3)
             task.wait(0.3)
-            loading:Destroy()
+            if loading and loading.Parent then
+                loading:Destroy()
+            end
         end)
     end
 
     return window
 end
-
 
 return WinUI
