@@ -1,22 +1,28 @@
-Os-UI (WinUI & MacUI)
+# Os-UI (WinUI & MacUI)
 
-A collection of lightweight, feature-rich Roblox UI libraries inspired by Windows 10 and macOS Big Sur/Sonoma design systems.
+A collection of lightweight, feature-rich Roblox UI libraries inspired by **Windows 10** and **macOS Big Sur/Sonoma** design systems.
 
-⚡ Quick Load
+---
 
+## ⚡ Quick Load
+
+```lua
 -- Windows 10 Style
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
 -- macOS Style
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
+```
 
+---
 
-🍎 MacUI (v2.0.0)
+## 🍎 MacUI (v2.0.0)
 
 Gives your script a clean macOS aesthetic complete with a functional Dock, glassmorphism, boot sequence, and Lucide icon support.
 
-Starter Template
+### Starter Template
 
+```lua
 local Window = MacUI:CreateWindow({
     Name = "Admin Panel",
     Subtitle = "v2.0",
@@ -54,76 +60,23 @@ MainSection:CreateButton({
         })
     end
 })
+```
 
+### Window Options
 
-Window Options
+| Parameter | Type | Default | Notes |
+| :--- | :--- | :--- | :--- |
+| `Name` | `string` | `"MacUI"` | Main window header text |
+| `Subtitle` | `string` | `""` | Secondary header text |
+| `Theme` | `string` | `"Dark"` | Preset palette to use |
+| `Boot` | `boolean` | `true` | Runs startup sequence |
+| `Dock` | `boolean` | `true` | Dock-style navigation bar |
+| `Acrylic` | `boolean` | `true` | Background translucency |
+| `Size` | `UDim2` | `760x500` | Initial UI bounds |
 
-Parameter
+### Available Controls
 
-Type
-
-Default
-
-Notes
-
-Name
-
-string
-
-"MacUI"
-
-Main window header text
-
-Subtitle
-
-string
-
-""
-
-Secondary header text
-
-Theme
-
-string
-
-"Dark"
-
-Preset palette to use
-
-Boot
-
-boolean
-
-true
-
-Runs startup sequence
-
-Dock
-
-boolean
-
-true
-
-Dock-style navigation bar
-
-Acrylic
-
-boolean
-
-true
-
-Background translucency
-
-Size
-
-UDim2
-
-760x500
-
-Initial UI bounds
-
-Available Controls
-
+```lua
 -- Toggle
 local Toggle = Section:CreateToggle({ Name = "Enable", CurrentValue = false, Callback = function(val) end })
 Toggle:Set(true)
@@ -146,14 +99,17 @@ Section:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(255, 0, 0
 
 -- Segmented Control
 Section:CreateSegmentedControl({ Options = {"Day", "Night"}, Default = "Day", Callback = function(choice) end })
+```
 
+---
 
-🪟 WinUI (v1.0)
+## 🪟 WinUI (v1.0)
 
 A traditional Windows 10 Fluent UI structure with embedded sidebar tabs and built-in config saving.
 
-Basic Setup
+### Basic Setup
 
+```lua
 local Window = WinUI:CreateWindow({
     Name = "Windows 10 Hub",
     LoadingTitle = "WinUI",
@@ -186,12 +142,14 @@ Tab:CreateKeybind({
         Window:Toggle()
     end
 })
+```
 
+---
 
-🎨 Custom Themes & Configs
+## 🎨 Custom Themes & Configs
 
-Creating Custom Themes (MacUI)
-
+### Creating Custom Themes (MacUI)
+```lua
 MacUI:RegisterTheme("Dracula", {
     Background = Color3.fromRGB(40, 42, 54),
     SecondaryBackground = Color3.fromRGB(68, 71, 90),
@@ -209,14 +167,16 @@ MacUI:RegisterTheme("Dracula", {
 })
 
 MacUI:SetTheme("Dracula")
+```
 
-
-Save System (Executors)
-
+### Save System (Executors)
+```lua
 MacUI:CreateConfig({ Folder = "MyScriptHub", File = "settings" })
 MacUI:LoadConfig()
+```
 
+---
 
-📜 License
+## 📜 License
 
 MIT License. Free to use, modify, and distribute for any Roblox client project.
