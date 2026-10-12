@@ -408,9 +408,13 @@ local function CreateGlassFrame(parent, props)
         stroke.Parent = base
     end
 
-    -- Expose base for coloring
-    container.GlassBase = base
     return container
+end
+
+-- Safe accessor (Instances cannot hold custom .GlassBase fields)
+local function GetGlassBase(container)
+    if not container then return nil end
+    return container:FindFirstChild("GlassBase")
 end
 
 -- ============================================================
@@ -540,7 +544,7 @@ function MacUI:Notify(options)
     notifContainer.AnchorPoint = Vector2.new(1, 0)
     notifContainer.ZIndex = 100
 
-    local notif = notifContainer.GlassBase
+    local notif = GetGlassBase(notifContainer)
 
     local iconImg = Instance.new("ImageLabel")
     iconImg.Size = UDim2.new(0, 28, 0, 28)
@@ -677,7 +681,7 @@ function MacUI:CreateWindow(options)
     windowContainer.Position = UDim2.new(0.5, -size.X.Offset / 2, 0.5, -size.Y.Offset / 2)
     windowContainer.ClipsDescendants = true
 
-    local window = windowContainer.GlassBase
+    local window = GetGlassBase(windowContainer)
     window.ClipsDescendants = true
 
     -- Title bar
@@ -794,7 +798,7 @@ function MacUI:CreateWindow(options)
         dockContainer.ZIndex = 20
         dockContainer.AutomaticSize = Enum.AutomaticSize.X
 
-        dockFrame = dockContainer.GlassBase
+        dockFrame = GetGlassBase(dockContainer)
         dockFrame.AutomaticSize = Enum.AutomaticSize.X
 
         local dockPad = Instance.new("UIPadding")
@@ -817,7 +821,7 @@ function MacUI:CreateWindow(options)
     local Window = {
         ScreenGui = screenGui,
         Frame = windowContainer,
-        GlassBase = window,
+        GlassBase = window, -- direct reference to the Frame named GlassBase
         TitleBar = titleBar,
         Content = contentScroll,
         Dock = dockContainer,
@@ -884,13 +888,17 @@ function MacUI:CreateWindow(options)
 
     function Window:ApplyTheme(t)
         theme = t
-        if windowContainer.GlassBase then
-            windowContainer.GlassBase.BackgroundColor3 = t.Background
+        local winBase = GetGlassBase(windowContainer)
+        if winBase then
+            winBase.BackgroundColor3 = t.Background
         end
         titleLabel.TextColor3 = t.Text
         searchBtn.ImageColor3 = t.SecondaryText
-        if dockContainer and dockContainer.GlassBase then
-            dockContainer.GlassBase.BackgroundColor3 = t.Dock or t.SecondaryBackground
+        if dockContainer then
+            local dockBase = GetGlassBase(dockContainer)
+            if dockBase then
+                dockBase.BackgroundColor3 = t.Dock or t.SecondaryBackground
+            end
         end
     end
 
@@ -1131,12 +1139,13 @@ function MacUI:CreateWindow(options)
                 })
                 btnContainer.Size = UDim2.new(1, 0, 0, opts.Description and 54 or 40)
 
+                local btnBase = GetGlassBase(btnContainer)
                 local btn = Instance.new("TextButton")
                 btn.Size = UDim2.new(1, 0, 1, 0)
                 btn.BackgroundTransparency = 1
                 btn.Text = ""
                 btn.AutoButtonColor = false
-                btn.Parent = btnContainer.GlassBase
+                btn.Parent = btnBase
 
                 local lbl = Instance.new("TextLabel")
                 lbl.Size = UDim2.new(1, -20, opts.Description and 0 or 1, opts.Description and 22 or 0)
@@ -1163,10 +1172,10 @@ function MacUI:CreateWindow(options)
                 end
 
                 TrackConnection(btn.MouseEnter:Connect(function()
-                    MacUI.Tween(btnContainer.GlassBase, {Time = 0.15}, {BackgroundTransparency = 0.15})
+                    MacUI.Tween(btnBase, {Time = 0.15}, {BackgroundTransparency = 0.15})
                 end))
                 TrackConnection(btn.MouseLeave:Connect(function()
-                    MacUI.Tween(btnContainer.GlassBase, {Time = 0.15}, {BackgroundTransparency = 0.35})
+                    MacUI.Tween(btnBase, {Time = 0.15}, {BackgroundTransparency = 0.35})
                 end))
                 TrackConnection(btn.MouseButton1Click:Connect(function()
                     MacUI.PulseScale(btnContainer, 0.97, 0.18)
@@ -1704,6 +1713,7 @@ function MacUI:CreateWindow(options)
         searchFrame.Visible = false
         searchFrame.ZIndex = 50
 
+        local searchBase = GetGlassBase(searchFrame)
         local searchBox = Instance.new("TextBox")
         searchBox.Size = UDim2.new(1, -12, 1, -8)
         searchBox.Position = UDim2.new(0, 6, 0, 4)
@@ -1714,7 +1724,7 @@ function MacUI:CreateWindow(options)
         searchBox.PlaceholderColor3 = theme.SecondaryText
         searchBox.Font = Enum.Font.Gotham
         searchBox.TextSize = 14
-        searchBox.Parent = searchFrame.GlassBase
+        searchBox.Parent = searchBase
 
         TrackConnection(searchBtn.MouseButton1Click:Connect(function()
             searchFrame.Visible = not searchFrame.Visible
@@ -1734,15 +1744,16 @@ function MacUI:CreateWindow(options)
 
     -- Opening animation
     local function OpenWindow()
+        local winBase = GetGlassBase(windowContainer)
         windowContainer.Size = UDim2.new(0, 0, 0, 0)
-        if windowContainer.GlassBase then
-            windowContainer.GlassBase.BackgroundTransparency = 1
+        if winBase then
+            winBase.BackgroundTransparency = 1
         end
         MacUI.Tween(windowContainer, {Time = 0.45, EasingStyle = Enum.EasingStyle.Quint}, {
             Size = size
         })
-        if windowContainer.GlassBase then
-            MacUI.Tween(windowContainer.GlassBase, {Time = 0.4}, {
+        if winBase then
+            MacUI.Tween(winBase, {Time = 0.4}, {
                 BackgroundTransparency = acrylic and MacUI.GlassStyle.Transparency or 0.06
             })
         end
