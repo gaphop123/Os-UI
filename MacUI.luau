@@ -121,69 +121,108 @@ function MacUI.PulseScale(object, scale, duration)
     end)
 end
 
--- Lucide Icons (selected high-quality set)
-local Icons = {
-    -- Core
-    apple = "rbxassetid://10709761889",
-    home = "rbxassetid://10723407389",
-    house = "rbxassetid://10723407389",
-    settings = "rbxassetid://10734950309",
-    search = "rbxassetid://10734943674",
-    user = "rbxassetid://10747373176",
-    person = "rbxassetid://10747373176",
-    users = "rbxassetid://10747373426",
-    info = "rbxassetid://10723415903",
-    check = "rbxassetid://10709782417",
-    close = "rbxassetid://10747384394",
-    x = "rbxassetid://10747384394",
-    plus = "rbxassetid://10734883878",
-    minus = "rbxassetid://10734884598",
-    -- Navigation / UI
-    menu = "rbxassetid://10734884598",
-    grid = "rbxassetid://10723407389",
-    list = "rbxassetid://10723433655",
-    eye = "rbxassetid://10723346959",
-    ["eye-off"] = "rbxassetid://10723346871",
-    lock = "rbxassetid://10723434711",
-    unlock = "rbxassetid://10747366266",
-    -- Media / Misc
-    image = "rbxassetid://10723415494",
-    camera = "rbxassetid://10709782417",
-    music = "rbxassetid://10734943674",
-    volume = "rbxassetid://10747366266",
-    bell = "rbxassetid://10709775704",
-    star = "rbxassetid://10734975486",
-    heart = "rbxassetid://10723407389",
-    -- Tools
-    wrench = "rbxassetid://10734975486",
-    tool = "rbxassetid://10734975486",
-    palette = "rbxassetid://10734883878",
-    zap = "rbxassetid://10747384394",
-    flame = "rbxassetid://10723407389",
-    -- Files
-    file = "rbxassetid://10723366167",
-    folder = "rbxassetid://10723366167",
-    download = "rbxassetid://10723344270",
-    upload = "rbxassetid://10747366434",
-    -- Default fallback
-    default = "rbxassetid://10723407389",
-    player = "rbxassetid://10747373176",
-    visuals = "rbxassetid://10723407389",
-    misc = "rbxassetid://10734950309"
-}
+-- ============================================================
+-- Lucide Icons via GaphopUI spritesheet pack
+-- https://raw.githubusercontent.com/gaphop123/GaphopUI/refs/heads/main/icon.lua
+-- ============================================================
+local LucideSprites = nil
+local EmojiIcons = nil
 
-function MacUI.GetIcon(name)
-    if not name then return Icons.default end
-    local key = string.lower(tostring(name))
-    -- Support both "home" and "lucide-home"
-    if string.sub(key, 1, 7) == "lucide-" then
-        key = string.sub(key, 8)
+local function LoadLucidePack()
+    if LucideSprites then return true end
+    local ok, pack = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/GaphopUI/refs/heads/main/icon.lua"))()
+    end)
+    if ok and type(pack) == "table" and pack.LucideSprites then
+        LucideSprites = pack.LucideSprites
+        EmojiIcons = pack.Icons
+        return true
     end
-    return Icons[key] or Icons.default
+    -- Offline / failed fallback: minimal single-asset icons
+    LucideSprites = {}
+    EmojiIcons = {}
+    return false
 end
 
-function MacUI.AddIcon(name, assetId)
-    Icons[string.lower(name)] = assetId
+-- Normalize icon name: "home", "lucide-home", "Home", "house" → key used in pack
+local function NormalizeIconKey(name)
+    if not name then return "home" end
+    local key = string.lower(tostring(name))
+    key = string.gsub(key, "^lucide%-", "")
+    key = string.gsub(key, "%-", "") -- home-icon → homeicon (pack uses no hyphens mostly)
+    -- common aliases
+    if key == "house" then key = "home" end
+    if key == "person" then key = "user" end
+    if key == "cog" then key = "settings" end
+    if key == "close" then key = "x" end
+    return key
+end
+
+--[[
+    Returns either:
+      - spritesheet data: { Image = "rbxassetid://...", ImageRectSize = Vector2, ImageRectOffset = Vector2 }
+      - or plain: { Image = "rbxassetid://..." }
+]]
+function MacUI.GetIconData(name)
+    LoadLucidePack()
+    local key = NormalizeIconKey(name)
+
+    if LucideSprites and LucideSprites[key] then
+        local d = LucideSprites[key]
+        -- format: { assetId, {w, h}, {ox, oy} }
+        return {
+            Image = "rbxassetid://" .. tostring(d[1]),
+            ImageRectSize = Vector2.new(d[2][1], d[2][2]),
+            ImageRectOffset = Vector2.new(d[3][1], d[3][2]),
+            IsSprite = true
+        }
+    end
+
+    -- try without stripping hyphens (e.g. if pack has keys with hyphens - it doesn't)
+    -- fallback: empty / default apple or home sprite if available
+    if LucideSprites and LucideSprites.home then
+        local d = LucideSprites.home
+        return {
+            Image = "rbxassetid://" .. tostring(d[1]),
+            ImageRectSize = Vector2.new(d[2][1], d[2][2]),
+            ImageRectOffset = Vector2.new(d[3][1], d[3][2]),
+            IsSprite = true
+        }
+    end
+
+    return { Image = "rbxassetid://0", IsSprite = false }
+end
+
+-- Backward-compatible: returns image string only
+function MacUI.GetIcon(name)
+    local data = MacUI.GetIconData(name)
+    return data.Image
+end
+
+-- Apply full spritesheet icon onto an ImageLabel / ImageButton
+function MacUI.ApplyIcon(imageObject, name)
+    if not imageObject then return end
+    local data = MacUI.GetIconData(name)
+    imageObject.Image = data.Image
+    if data.IsSprite then
+        imageObject.ImageRectSize = data.ImageRectSize
+        imageObject.ImageRectOffset = data.ImageRectOffset
+    else
+        imageObject.ImageRectSize = Vector2.new(0, 0)
+        imageObject.ImageRectOffset = Vector2.new(0, 0)
+    end
+end
+
+function MacUI.AddIcon(name, assetIdOrData)
+    LoadLucidePack()
+    local key = NormalizeIconKey(name)
+    if type(assetIdOrData) == "table" then
+        LucideSprites[key] = assetIdOrData
+    else
+        -- plain asset id string or number
+        local id = tonumber(tostring(assetIdOrData):match("%d+")) or 0
+        LucideSprites[key] = { id, {48, 48}, {0, 0} }
+    end
 end
 
 -- Theme system
@@ -447,7 +486,7 @@ function MacUI:PlayBootSequence(options)
     logo.Size = UDim2.new(0, 72, 0, 72)
     logo.Position = UDim2.new(0.5, -36, 0.42, -36)
     logo.BackgroundTransparency = 1
-    logo.Image = MacUI.GetIcon("apple")
+    MacUI.ApplyIcon(logo, "apple")
     logo.ImageColor3 = Color3.fromRGB(255, 255, 255)
     logo.ImageTransparency = 1
     logo.ScaleType = Enum.ScaleType.Fit
@@ -550,7 +589,7 @@ function MacUI:Notify(options)
     iconImg.Size = UDim2.new(0, 28, 0, 28)
     iconImg.Position = UDim2.new(0, 14, 0.5, -14)
     iconImg.BackgroundTransparency = 1
-    iconImg.Image = self.GetIcon(icon)
+    MacUI.ApplyIcon(iconImg, icon)
     iconImg.ImageColor3 = theme.Accent
     iconImg.Parent = notif
 
@@ -742,7 +781,7 @@ function MacUI:CreateWindow(options)
     searchBtn.Size = UDim2.new(0, 20, 0, 20)
     searchBtn.Position = UDim2.new(1, -36, 0.5, -10)
     searchBtn.BackgroundTransparency = 1
-    searchBtn.Image = MacUI.GetIcon("search")
+    MacUI.ApplyIcon(searchBtn, "search")
     searchBtn.ImageColor3 = theme.SecondaryText
     searchBtn.ZIndex = 11
     searchBtn.Parent = titleBar
@@ -1054,7 +1093,7 @@ function MacUI:CreateWindow(options)
             icon.Size = UDim2.new(0, 26, 0, 26)
             icon.Position = UDim2.new(0.5, -13, 0.5, -15)
             icon.BackgroundTransparency = 1
-            icon.Image = MacUI.GetIcon(iconName)
+            MacUI.ApplyIcon(icon, iconName)
             icon.ImageColor3 = theme.SecondaryText
             icon.ZIndex = 22
             icon.Parent = dockBtn
