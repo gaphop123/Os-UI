@@ -1,10 +1,11 @@
 --[[
     WinUI - Windows 10 inspired Luau UI Library for Roblox
     Architecture inspired by Rayfield Gen2 style API
-    Visual language: Windows 10 (Settings, title bar, Metro/Fluent controls)
+    Visual language: Windows 10 (Settings, title bar, Metro/Fluent controls + Taskbar)
     Pure Luau • Modular • Production-oriented
 
-    v1.1.0 – Fixed icons, expanded themes, tab selection, theme apply, CoreGui fallback
+    v2.0.0 – Windows 10 boot loading, Taskbar tabs (Lucide icons),
+             richer animations, smoother transitions, improved polish
 ]]
 
 local WinUI = {}
@@ -25,7 +26,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 -- Constants
 local ACCENT_DEFAULT = Color3.fromRGB(0, 120, 215)
 local LIBRARY_NAME = "WinUI"
-local VERSION = "1.1.0"
+local VERSION = "2.0.0"
 
 -- Utility
 local function safeCall(fn, ...)
@@ -69,13 +70,26 @@ local function create(className, props, children)
     return inst
 end
 
+-- Enhanced tween helper with common presets
 local function tween(obj, props, duration, style, dir)
-    duration = duration or 0.18
-    style = style or Enum.EasingStyle.Quad
+    duration = duration or 0.2
+    style = style or Enum.EasingStyle.Quart
     dir = dir or Enum.EasingDirection.Out
     local t = TweenService:Create(obj, TweenInfo.new(duration, style, dir), props)
     t:Play()
     return t
+end
+
+local function tweenIn(obj, props, duration)
+    return tween(obj, props, duration or 0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+end
+
+local function tweenOut(obj, props, duration)
+    return tween(obj, props, duration or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+end
+
+local function spring(obj, props, duration)
+    return tween(obj, props, duration or 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 end
 
 -- Safe parent for ScreenGuis (CoreGui may be restricted)
@@ -100,6 +114,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(255, 255, 255),
         Sidebar = Color3.fromRGB(230, 230, 230),
         TitleBar = Color3.fromRGB(255, 255, 255),
+        Taskbar = Color3.fromRGB(16, 16, 16),
+        TaskbarHover = Color3.fromRGB(40, 40, 40),
         Text = Color3.fromRGB(32, 32, 32),
         TextSecondary = Color3.fromRGB(90, 90, 90),
         Border = Color3.fromRGB(200, 200, 200),
@@ -113,6 +129,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(255, 255, 255),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Windows10Dark = {
         Name = "Windows10Dark",
@@ -121,6 +138,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(45, 45, 45),
         Sidebar = Color3.fromRGB(25, 25, 25),
         TitleBar = Color3.fromRGB(32, 32, 32),
+        Taskbar = Color3.fromRGB(16, 16, 16),
+        TaskbarHover = Color3.fromRGB(50, 50, 50),
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(180, 180, 180),
         Border = Color3.fromRGB(60, 60, 60),
@@ -134,6 +153,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(45, 45, 45),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Windows10Light = {
         Name = "Windows10Light",
@@ -142,6 +162,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(255, 255, 255),
         Sidebar = Color3.fromRGB(235, 235, 235),
         TitleBar = Color3.fromRGB(255, 255, 255),
+        Taskbar = Color3.fromRGB(230, 230, 230),
+        TaskbarHover = Color3.fromRGB(210, 210, 210),
         Text = Color3.fromRGB(32, 32, 32),
         TextSecondary = Color3.fromRGB(100, 100, 100),
         Border = Color3.fromRGB(210, 210, 210),
@@ -155,6 +177,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(255, 255, 255),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Blue = {
         Name = "Blue",
@@ -163,6 +186,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(40, 40, 45),
         Sidebar = Color3.fromRGB(25, 25, 30),
         TitleBar = Color3.fromRGB(32, 32, 32),
+        Taskbar = Color3.fromRGB(18, 18, 24),
+        TaskbarHover = Color3.fromRGB(45, 45, 55),
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(180, 180, 180),
         Border = Color3.fromRGB(55, 55, 60),
@@ -176,6 +201,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(40, 40, 45),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Gray = {
         Name = "Gray",
@@ -184,6 +210,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(50, 50, 50),
         Sidebar = Color3.fromRGB(30, 30, 30),
         TitleBar = Color3.fromRGB(40, 40, 40),
+        Taskbar = Color3.fromRGB(22, 22, 22),
+        TaskbarHover = Color3.fromRGB(55, 55, 55),
         Text = Color3.fromRGB(240, 240, 240),
         TextSecondary = Color3.fromRGB(170, 170, 170),
         Border = Color3.fromRGB(70, 70, 70),
@@ -197,8 +225,8 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(50, 50, 50),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
-    -- Extra themes
     DarkBlue = {
         Name = "DarkBlue",
         Accent = Color3.fromRGB(0, 153, 255),
@@ -206,6 +234,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(28, 34, 48),
         Sidebar = Color3.fromRGB(14, 18, 28),
         TitleBar = Color3.fromRGB(22, 28, 40),
+        Taskbar = Color3.fromRGB(12, 16, 26),
+        TaskbarHover = Color3.fromRGB(35, 45, 65),
         Text = Color3.fromRGB(240, 244, 255),
         TextSecondary = Color3.fromRGB(150, 160, 185),
         Border = Color3.fromRGB(45, 55, 75),
@@ -219,6 +249,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(28, 34, 48),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Purple = {
         Name = "Purple",
@@ -227,6 +258,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(42, 38, 52),
         Sidebar = Color3.fromRGB(24, 22, 30),
         TitleBar = Color3.fromRGB(30, 28, 36),
+        Taskbar = Color3.fromRGB(18, 16, 24),
+        TaskbarHover = Color3.fromRGB(50, 45, 65),
         Text = Color3.fromRGB(245, 240, 255),
         TextSecondary = Color3.fromRGB(170, 160, 190),
         Border = Color3.fromRGB(60, 55, 75),
@@ -240,6 +273,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(42, 38, 52),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Green = {
         Name = "Green",
@@ -248,6 +282,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(38, 44, 38),
         Sidebar = Color3.fromRGB(22, 26, 22),
         TitleBar = Color3.fromRGB(28, 32, 28),
+        Taskbar = Color3.fromRGB(16, 20, 16),
+        TaskbarHover = Color3.fromRGB(40, 50, 40),
         Text = Color3.fromRGB(240, 255, 245),
         TextSecondary = Color3.fromRGB(160, 180, 165),
         Border = Color3.fromRGB(55, 70, 58),
@@ -261,6 +297,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(38, 44, 38),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     Orange = {
         Name = "Orange",
@@ -269,6 +306,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(48, 40, 34),
         Sidebar = Color3.fromRGB(28, 24, 20),
         TitleBar = Color3.fromRGB(36, 30, 26),
+        Taskbar = Color3.fromRGB(22, 18, 14),
+        TaskbarHover = Color3.fromRGB(55, 45, 35),
         Text = Color3.fromRGB(255, 248, 240),
         TextSecondary = Color3.fromRGB(190, 170, 150),
         Border = Color3.fromRGB(70, 58, 48),
@@ -282,6 +321,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(48, 40, 34),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
     FluentDark = {
         Name = "FluentDark",
@@ -290,6 +330,8 @@ local Themes = {
         SecondaryBackground = Color3.fromRGB(44, 44, 44),
         Sidebar = Color3.fromRGB(26, 26, 26),
         TitleBar = Color3.fromRGB(32, 32, 32),
+        Taskbar = Color3.fromRGB(20, 20, 20),
+        TaskbarHover = Color3.fromRGB(50, 50, 50),
         Text = Color3.fromRGB(255, 255, 255),
         TextSecondary = Color3.fromRGB(200, 200, 200),
         Border = Color3.fromRGB(58, 58, 58),
@@ -303,6 +345,7 @@ local Themes = {
         NotificationText = Color3.fromRGB(255, 255, 255),
         Shadow = Color3.fromRGB(0, 0, 0),
         StatusBar = Color3.fromRGB(44, 44, 44),
+        BootBackground = Color3.fromRGB(0, 0, 0),
     },
 }
 
@@ -333,6 +376,12 @@ local Icons = {
     cog      = "rbxassetid://10709810948",
     users    = "rbxassetid://10747373426",
     swords   = "rbxassetid://10734975692",
+    star     = "rbxassetid://10734950309",
+    heart    = "rbxassetid://10723407389",
+    code     = "rbxassetid://10709782497",
+    game     = "rbxassetid://10734975486",
+    world    = "rbxassetid://10723346959",
+    shield   = "rbxassetid://10734975486",
 }
 
 local function resolveIcon(name)
@@ -352,6 +401,140 @@ local Notifications = {}
 local ConfigData = {}
 local Connections = {}
 local IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- ============================================================
+-- Windows 10 style boot / loading animation
+-- ============================================================
+local function createBootLoader(parent, title, subtitle, accent)
+    local boot = create("Frame", {
+        Name = "BootLoader",
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 200,
+        Parent = parent,
+    })
+
+    -- Soft vignette / glow
+    local glow = create("ImageLabel", {
+        Name = "Glow",
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857084",
+        ImageColor3 = accent or ACCENT_DEFAULT,
+        ImageTransparency = 0.85,
+        Size = UDim2.new(0, 420, 0, 420),
+        Position = UDim2.new(0.5, 0, 0.42, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 201,
+        Parent = boot,
+    })
+
+    -- Windows-style circular dots (orbiting)
+    local spinner = create("Frame", {
+        Name = "Spinner",
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 64, 0, 64),
+        Position = UDim2.new(0.5, 0, 0.42, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 202,
+        Parent = boot,
+    })
+
+    local dots = {}
+    local DOT_COUNT = 6
+    for i = 1, DOT_COUNT do
+        local angle = (i - 1) * (360 / DOT_COUNT)
+        local rad = math.rad(angle)
+        local r = 22
+        local dot = create("Frame", {
+            Name = "Dot" .. i,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0,
+            Size = UDim2.new(0, 8, 0, 8),
+            Position = UDim2.new(0.5, math.cos(rad) * r - 4, 0.5, math.sin(rad) * r - 4),
+            AnchorPoint = Vector2.new(0, 0),
+            ZIndex = 203,
+            Parent = spinner,
+        })
+        create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+        dots[i] = { frame = dot, baseAngle = angle, phase = (i - 1) / DOT_COUNT }
+    end
+
+    local titleLbl = create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -40, 0, 28),
+        Position = UDim2.new(0, 20, 0.58, 0),
+        Font = Enum.Font.GothamSemibold,
+        Text = title or "WinUI",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 20,
+        TextTransparency = 1,
+        ZIndex = 202,
+        Parent = boot,
+    })
+
+    local subLbl = create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -40, 0, 20),
+        Position = UDim2.new(0, 20, 0.58, 32),
+        Font = Enum.Font.Gotham,
+        Text = subtitle or "Starting...",
+        TextColor3 = Color3.fromRGB(180, 180, 180),
+        TextSize = 13,
+        TextTransparency = 1,
+        ZIndex = 202,
+        Parent = boot,
+    })
+
+    -- Fade titles in
+    tween(titleLbl, { TextTransparency = 0 }, 0.6)
+    tween(subLbl, { TextTransparency = 0 }, 0.7)
+
+    -- Animate orbiting dots with brightness pulse (classic Win10 feel)
+    local startTime = os.clock()
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not spinner or not spinner.Parent then
+            if conn then conn:Disconnect() end
+            return
+        end
+        local t = os.clock() - startTime
+        local speed = 2.2
+        for i, d in ipairs(dots) do
+            local angle = d.baseAngle + t * 180 * speed
+            local rad = math.rad(angle)
+            local r = 22
+            d.frame.Position = UDim2.new(0.5, math.cos(rad) * r - 4, 0.5, math.sin(rad) * r - 4)
+            -- Pulse opacity based on phase
+            local pulse = (math.sin(t * 6 + d.phase * math.pi * 2) + 1) / 2
+            d.frame.BackgroundTransparency = 0.15 + pulse * 0.65
+            local s = 6 + pulse * 3
+            d.frame.Size = UDim2.new(0, s, 0, s)
+        end
+        -- Subtle glow breathe
+        if glow and glow.Parent then
+            glow.ImageTransparency = 0.82 + math.sin(t * 1.8) * 0.08
+        end
+    end)
+
+    return boot, function()
+        if conn then conn:Disconnect() end
+        -- Exit animation
+        tween(titleLbl, { TextTransparency = 1 }, 0.25)
+        tween(subLbl, { TextTransparency = 1 }, 0.25)
+        tween(spinner, { BackgroundTransparency = 1 }, 0.3)
+        for _, d in ipairs(dots) do
+            tween(d.frame, { BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 0) }, 0.25)
+        end
+        tween(glow, { ImageTransparency = 1 }, 0.3)
+        tween(boot, { BackgroundTransparency = 1 }, 0.4)
+        task.delay(0.45, function()
+            if boot and boot.Parent then
+                boot:Destroy()
+            end
+        end)
+    end
+end
 
 -- Notification system
 local NotificationContainer
@@ -407,30 +590,34 @@ function WinUI:Notify(opts)
         ClipsDescendants = true,
         Parent = holder,
     })
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = notif })
+    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = notif })
     create("UIStroke", {
         Color = CurrentTheme.Border,
         Thickness = 1,
-        Transparency = 0.4,
+        Transparency = 0.5,
         Parent = notif,
     })
 
-    create("Frame", {
+    -- Accent bar with slide-in
+    local accentBar = create("Frame", {
         BackgroundColor3 = AccentColor,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 4, 1, 0),
+        Size = UDim2.new(0, 0, 1, 0),
         Parent = notif,
     })
+    tween(accentBar, { Size = UDim2.new(0, 4, 1, 0) }, 0.3, Enum.EasingStyle.Back)
 
     if icon then
-        create("ImageLabel", {
+        local ic = create("ImageLabel", {
             BackgroundTransparency = 1,
             Size = UDim2.new(0, 20, 0, 20),
             Position = UDim2.new(0, 14, 0, 10),
             Image = resolveIcon(icon),
             ImageColor3 = CurrentTheme.NotificationText,
+            ImageTransparency = 1,
             Parent = notif,
         })
+        tween(ic, { ImageTransparency = 0 }, 0.25)
     end
 
     local titleOffset = icon and 40 or 16
@@ -442,6 +629,7 @@ function WinUI:Notify(opts)
         Text = title,
         TextColor3 = CurrentTheme.NotificationText,
         TextSize = 14,
+        TextTransparency = 1,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = notif,
     })
@@ -455,6 +643,7 @@ function WinUI:Notify(opts)
         Text = content,
         TextColor3 = CurrentTheme.NotificationText,
         TextSize = 13,
+        TextTransparency = 1,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
@@ -469,24 +658,34 @@ function WinUI:Notify(opts)
         TextColor3 = CurrentTheme.NotificationText,
         TextSize = 12,
         Font = Enum.Font.Gotham,
+        TextTransparency = 0.4,
         Parent = notif,
     })
+    closeBtn.MouseEnter:Connect(function()
+        tween(closeBtn, { TextTransparency = 0 }, 0.12)
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        tween(closeBtn, { TextTransparency = 0.4 }, 0.12)
+    end)
 
-    -- Proper size after layout
     task.defer(function()
         if not notif or not notif.Parent then return end
         local h = math.max(70, 42 + contentLabel.TextBounds.Y + 14)
         notif.Size = UDim2.new(0, 320, 0, h)
     end)
 
-    notif.Position = UDim2.new(1, 20, 0, 0)
-    tween(notif, { Position = UDim2.new(0, 0, 0, 0) }, 0.25, Enum.EasingStyle.Quart)
+    -- Slide + fade in
+    notif.Position = UDim2.new(1, 40, 0, 0)
+    notif.BackgroundTransparency = 0.3
+    tween(notif, { Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 0 }, 0.32, Enum.EasingStyle.Quart)
+    tween(titleLabel, { TextTransparency = 0 }, 0.25)
+    tween(contentLabel, { TextTransparency = 0.15 }, 0.3)
 
     local closed = false
     local function close()
         if closed then return end
         closed = true
-        tween(notif, { Position = UDim2.new(1, 40, 0, 0), BackgroundTransparency = 1 }, 0.22)
+        tween(notif, { Position = UDim2.new(1, 50, 0, 0), BackgroundTransparency = 1 }, 0.22)
         task.delay(0.25, function()
             if notif and notif.Parent then
                 notif:Destroy()
@@ -601,7 +800,9 @@ function WinUI:GetIcons()
     return Icons
 end
 
+-- ============================================================
 -- Main Window Creator
+-- ============================================================
 function WinUI:CreateWindow(options)
     options = options or {}
     local name = options.Name or "WinUI"
@@ -609,6 +810,8 @@ function WinUI:CreateWindow(options)
     local loadingSubtitle = options.LoadingSubtitle or "Windows 10 UI Library"
     local themeName = options.Theme or "Windows10"
     local config = options.ConfigurationSaving or { Enabled = false }
+    local showBoot = options.ShowBoot ~= false -- default true
+    local bootDuration = options.BootDuration or 1.8
 
     if Themes[themeName] then
         CurrentTheme = deepCopy(Themes[themeName])
@@ -626,7 +829,7 @@ function WinUI:CreateWindow(options)
         Visible = true,
         Minimized = false,
         Connections = {},
-        ThemeElements = {}, -- track elements for full theme reapply
+        ThemeElements = {},
     }
     setmetatable(window, { __index = WinUI })
 
@@ -642,7 +845,10 @@ function WinUI:CreateWindow(options)
     })
     window.ScreenGui = screenGui
 
-    local mainSize = IsMobile and UDim2.new(0.95, 0, 0.85, 0) or UDim2.new(0, 720, 0, 480)
+    local TASKBAR_H = IsMobile and 52 or 48
+    local TITLEBAR_H = 32
+    local mainSize = IsMobile and UDim2.new(0.96, 0, 0.88, 0) or UDim2.new(0, 760, 0, 520)
+
     local main = create("Frame", {
         Name = "Main",
         BackgroundColor3 = CurrentTheme.Background,
@@ -654,22 +860,23 @@ function WinUI:CreateWindow(options)
         Parent = screenGui,
     })
     window.Main = main
-    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = main })
+    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = main })
     local mainStroke = create("UIStroke", {
         Color = CurrentTheme.Border,
         Thickness = 1,
         Parent = main,
     })
 
+    -- Soft shadow
     create("ImageLabel", {
         Name = "Shadow",
         BackgroundTransparency = 1,
         Image = "rbxassetid://6015897843",
         ImageColor3 = CurrentTheme.Shadow,
-        ImageTransparency = 0.6,
+        ImageTransparency = 0.55,
         ScaleType = Enum.ScaleType.Slice,
         SliceCenter = Rect.new(49, 49, 450, 450),
-        Size = UDim2.new(1, 40, 1, 40),
+        Size = UDim2.new(1, 48, 1, 48),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0.5, 0.5),
         ZIndex = 0,
@@ -681,16 +888,16 @@ function WinUI:CreateWindow(options)
         Name = "TitleBar",
         BackgroundColor3 = CurrentTheme.TitleBar,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, TITLEBAR_H),
         Parent = main,
     })
     window.TitleBar = titleBar
 
     local titleText = create("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 12, 0, 0),
-        Size = UDim2.new(1, -120, 1, 0),
-        Font = Enum.Font.Gotham,
+        Position = UDim2.new(0, 14, 0, 0),
+        Size = UDim2.new(1, -130, 1, 0),
+        Font = Enum.Font.GothamMedium,
         Text = name,
         TextColor3 = CurrentTheme.Text,
         TextSize = 13,
@@ -726,15 +933,15 @@ function WinUI:CreateWindow(options)
         })
         btn.MouseEnter:Connect(function()
             if isClose then
-                hover.BackgroundTransparency = 0
-                btn.TextColor3 = Color3.new(1, 1, 1)
+                tween(hover, { BackgroundTransparency = 0 }, 0.12)
+                tween(btn, { TextColor3 = Color3.new(1, 1, 1) }, 0.12)
             else
-                hover.BackgroundTransparency = CurrentTheme.HoverTransparency
+                tween(hover, { BackgroundTransparency = CurrentTheme.HoverTransparency }, 0.12)
             end
         end)
         btn.MouseLeave:Connect(function()
-            hover.BackgroundTransparency = 1
-            btn.TextColor3 = CurrentTheme.Text
+            tween(hover, { BackgroundTransparency = 1 }, 0.15)
+            tween(btn, { TextColor3 = CurrentTheme.Text }, 0.15)
         end)
         return btn
     end
@@ -767,61 +974,44 @@ function WinUI:CreateWindow(options)
     minBtn.MouseButton1Click:Connect(function()
         window.Minimized = not window.Minimized
         if window.Minimized then
-            tween(main, { Size = UDim2.new(0, main.AbsoluteSize.X, 0, 32) }, 0.2)
+            tween(main, { Size = UDim2.new(0, main.AbsoluteSize.X, 0, TITLEBAR_H) }, 0.25, Enum.EasingStyle.Quart)
         else
-            tween(main, { Size = mainSize }, 0.2)
+            tween(main, { Size = mainSize }, 0.28, Enum.EasingStyle.Quart)
         end
     end)
 
     closeBtn.MouseButton1Click:Connect(function()
-        window:Destroy()
+        -- Smooth close animation
+        tweenOut(main, { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }, 0.22)
+        task.delay(0.25, function()
+            window:Destroy()
+        end)
     end)
 
     maxBtn.MouseButton1Click:Connect(function()
         if main.Size.X.Scale > 0.9 then
-            tween(main, { Size = mainSize, Position = UDim2.new(0.5, 0, 0.5, 0) }, 0.2)
+            tween(main, { Size = mainSize, Position = UDim2.new(0.5, 0, 0.5, 0) }, 0.28, Enum.EasingStyle.Quart)
         else
-            tween(main, { Size = UDim2.new(1, -20, 1, -20), Position = UDim2.new(0.5, 0, 0.5, 0) }, 0.2)
+            tween(main, { Size = UDim2.new(1, -24, 1, -24), Position = UDim2.new(0.5, 0, 0.5, 0) }, 0.28, Enum.EasingStyle.Quart)
         end
     end)
 
-    -- Body
+    -- Body (content area above taskbar)
     local body = create("Frame", {
         Name = "Body",
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 32),
-        Size = UDim2.new(1, 0, 1, -56),
+        Position = UDim2.new(0, 0, 0, TITLEBAR_H),
+        Size = UDim2.new(1, 0, 1, -(TITLEBAR_H + TASKBAR_H)),
         Parent = main,
     })
+    window.Body = body
 
-    local sidebarWidth = IsMobile and 0 or 180
-    local sidebar = create("Frame", {
-        Name = "Sidebar",
-        BackgroundColor3 = CurrentTheme.Sidebar,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, sidebarWidth, 1, 0),
-        Parent = body,
-    })
-    window.Sidebar = sidebar
-
-    create("UIListLayout", {
-        Padding = UDim.new(0, 2),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = sidebar,
-    })
-    create("UIPadding", {
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 6),
-        PaddingRight = UDim.new(0, 6),
-        Parent = sidebar,
-    })
-
+    -- Content area (full width now – no sidebar)
     local content = create("Frame", {
         Name = "Content",
         BackgroundColor3 = CurrentTheme.Background,
         BorderSizePixel = 0,
-        Position = UDim2.new(0, sidebarWidth, 0, 0),
-        Size = UDim2.new(1, -sidebarWidth, 1, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         ClipsDescendants = true,
         Parent = body,
     })
@@ -845,91 +1035,108 @@ function WinUI:CreateWindow(options)
         Parent = contentScroll,
     })
     create("UIPadding", {
-        PaddingTop = UDim.new(0, 12),
-        PaddingLeft = UDim.new(0, 16),
-        PaddingRight = UDim.new(0, 16),
-        PaddingBottom = UDim.new(0, 16),
+        PaddingTop = UDim.new(0, 14),
+        PaddingLeft = UDim.new(0, 18),
+        PaddingRight = UDim.new(0, 18),
+        PaddingBottom = UDim.new(0, 18),
         Parent = contentScroll,
     })
     contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        contentScroll.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 24)
+        contentScroll.CanvasSize = UDim2.new(0, 0, 0, contentLayout.AbsoluteContentSize.Y + 28)
     end)
 
-    local statusBar = create("Frame", {
-        Name = "StatusBar",
-        BackgroundColor3 = CurrentTheme.StatusBar or CurrentTheme.SecondaryBackground,
+    -- ============================================================
+    -- TASKBAR (bottom) – tabs as Lucide icons
+    -- ============================================================
+    local taskbar = create("Frame", {
+        Name = "Taskbar",
+        BackgroundColor3 = CurrentTheme.Taskbar or Color3.fromRGB(16, 16, 16),
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 24),
-        Position = UDim2.new(0, 0, 1, -24),
+        Size = UDim2.new(1, 0, 0, TASKBAR_H),
+        Position = UDim2.new(0, 0, 1, -TASKBAR_H),
         Parent = main,
     })
-    local statusLabel = create("TextLabel", {
+    window.Taskbar = taskbar
+
+    -- Subtle top border line
+    create("Frame", {
+        Name = "TopLine",
+        BackgroundColor3 = AccentColor,
+        BackgroundTransparency = 0.7,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 0, 0),
+        Parent = taskbar,
+    })
+
+    local taskbarIcons = create("Frame", {
+        Name = "Icons",
         BackgroundTransparency = 1,
         Size = UDim2.new(1, -20, 1, 0),
         Position = UDim2.new(0, 10, 0, 0),
-        Font = Enum.Font.Gotham,
-        Text = name .. " • " .. VERSION,
-        TextColor3 = CurrentTheme.TextSecondary,
-        TextSize = 11,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = statusBar,
+        Parent = taskbar,
+    })
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 6),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = taskbarIcons,
     })
 
-    if IsMobile then
-        local mobileToggle = create("TextButton", {
-            Name = "MobileNav",
-            BackgroundColor3 = AccentColor,
-            Size = UDim2.new(0, 36, 0, 36),
-            Position = UDim2.new(0, 8, 0, 40),
-            Text = "≡",
-            TextColor3 = Color3.new(1, 1, 1),
-            TextSize = 18,
-            Font = Enum.Font.GothamBold,
-            Parent = main,
-        })
-        create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = mobileToggle })
-        local sidebarOpen = false
-        mobileToggle.MouseButton1Click:Connect(function()
-            sidebarOpen = not sidebarOpen
-            if sidebarOpen then
-                sidebar.Size = UDim2.new(0, 180, 1, 0)
-                content.Position = UDim2.new(0, 180, 0, 0)
-                content.Size = UDim2.new(1, -180, 1, 0)
-            else
-                sidebar.Size = UDim2.new(0, 0, 1, 0)
-                content.Position = UDim2.new(0, 0, 0, 0)
-                content.Size = UDim2.new(1, 0, 1, 0)
-            end
-        end)
-    end
+    -- Status / version chip on the right of taskbar
+    local statusChip = create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 90, 1, 0),
+        Position = UDim2.new(1, -100, 0, 0),
+        Font = Enum.Font.Gotham,
+        Text = "v" .. VERSION,
+        TextColor3 = Color3.fromRGB(160, 160, 160),
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = taskbar,
+    })
 
     function window:ApplyTheme()
         main.BackgroundColor3 = CurrentTheme.Background
         mainStroke.Color = CurrentTheme.Border
         titleBar.BackgroundColor3 = CurrentTheme.TitleBar
         titleText.TextColor3 = CurrentTheme.Text
-        sidebar.BackgroundColor3 = CurrentTheme.Sidebar
         content.BackgroundColor3 = CurrentTheme.Background
-        statusBar.BackgroundColor3 = CurrentTheme.StatusBar or CurrentTheme.SecondaryBackground
-        statusLabel.TextColor3 = CurrentTheme.TextSecondary
         contentScroll.ScrollBarImageColor3 = AccentColor
+        taskbar.BackgroundColor3 = CurrentTheme.Taskbar or Color3.fromRGB(16, 16, 16)
 
         for _, tab in ipairs(window.Tabs) do
-            if tab.Icon then
-                tab.Icon.ImageColor3 = (window.CurrentTab == tab) and AccentColor or CurrentTheme.TextSecondary
-            end
-            if tab.Label then
-                tab.Label.TextColor3 = (window.CurrentTab == tab) and AccentColor or CurrentTheme.Text
+            local selected = (window.CurrentTab == tab)
+            if tab.IconImage then
+                tab.IconImage.ImageColor3 = selected and AccentColor or Color3.fromRGB(200, 200, 200)
             end
             if tab.Indicator then
                 tab.Indicator.BackgroundColor3 = AccentColor
+                tab.Indicator.BackgroundTransparency = selected and 0 or 1
+            end
+            if tab.HoverBg then
+                tab.HoverBg.BackgroundColor3 = CurrentTheme.TaskbarHover or Color3.fromRGB(50, 50, 50)
             end
         end
     end
 
     function window:Toggle()
         window.Visible = not window.Visible
-        main.Visible = window.Visible
+        if window.Visible then
+            main.Visible = true
+            main.Size = UDim2.new(0, 0, 0, 0)
+            main.BackgroundTransparency = 0.4
+            tweenIn(main, { Size = mainSize, BackgroundTransparency = 0 }, 0.3)
+        else
+            tweenOut(main, { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }, 0.2)
+            task.delay(0.22, function()
+                if not window.Visible then
+                    main.Visible = false
+                end
+            end)
+        end
     end
 
     local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
@@ -940,7 +1147,9 @@ function WinUI:CreateWindow(options)
         end
     end))
 
-    -- CreateTab
+    -- ============================================================
+    -- CreateTab  →  adds a Lucide icon button on the Taskbar
+    -- ============================================================
     function window:CreateTab(tabName, iconName)
         local tabId = HttpService:GenerateGUID(false)
         local tab = {
@@ -950,60 +1159,94 @@ function WinUI:CreateWindow(options)
             Container = nil,
         }
 
+        -- Taskbar icon button
         local item = create("TextButton", {
             Name = tabName,
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 36),
+            Size = UDim2.new(0, IsMobile and 48 or 44, 0, IsMobile and 44 or 40),
             Text = "",
-            Parent = sidebar,
-        })
-        local indicator = create("Frame", {
-            Name = "Indicator",
-            BackgroundColor3 = AccentColor,
-            BorderSizePixel = 0,
-            Size = UDim2.new(0, 3, 0.6, 0),
-            Position = UDim2.new(0, 0, 0.2, 0),
-            Visible = false,
-            Parent = item,
-        })
-        local icon = create("ImageLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, 18, 0, 18),
-            Position = UDim2.new(0, 12, 0.5, -9),
-            Image = resolveIcon(iconName),
-            ImageColor3 = CurrentTheme.TextSecondary,
-            Parent = item,
-        })
-        local label = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0, 40, 0, 0),
-            Size = UDim2.new(1, -50, 1, 0),
-            Font = Enum.Font.Gotham,
-            Text = tabName,
-            TextColor3 = CurrentTheme.Text,
-            TextSize = 13,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = item,
+            AutoButtonColor = false,
+            Parent = taskbarIcons,
         })
 
-        local hoverFrame = create("Frame", {
+        local hoverBg = create("Frame", {
             Name = "Hover",
-            BackgroundColor3 = CurrentTheme.Hover,
+            BackgroundColor3 = CurrentTheme.TaskbarHover or Color3.fromRGB(50, 50, 50),
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 1, 0),
             ZIndex = 0,
             Parent = item,
         })
+        create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = hoverBg })
 
+        local icon = create("ImageLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 22, 0, 22),
+            Position = UDim2.new(0.5, 0, 0.5, -2),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Image = resolveIcon(iconName),
+            ImageColor3 = Color3.fromRGB(200, 200, 200),
+            ZIndex = 2,
+            Parent = item,
+        })
+
+        -- Active indicator (bottom underline, Windows style)
+        local indicator = create("Frame", {
+            Name = "Indicator",
+            BackgroundColor3 = AccentColor,
+            BorderSizePixel = 0,
+            Size = UDim2.new(0.55, 0, 0, 3),
+            Position = UDim2.new(0.5, 0, 1, -4),
+            AnchorPoint = Vector2.new(0.5, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 3,
+            Parent = item,
+        })
+        create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = indicator })
+
+        -- Tooltip on hover (desktop)
+        local tooltip
         item.MouseEnter:Connect(function()
             if window.CurrentTab ~= tab then
-                hoverFrame.BackgroundTransparency = CurrentTheme.HoverTransparency
+                tween(hoverBg, { BackgroundTransparency = 0.35 }, 0.12)
+                tween(icon, { ImageColor3 = Color3.fromRGB(255, 255, 255) }, 0.12)
+            end
+            if not IsMobile then
+                tooltip = create("TextLabel", {
+                    BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+                    Size = UDim2.new(0, 0, 0, 24),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Position = UDim2.new(0.5, 0, 0, -30),
+                    AnchorPoint = Vector2.new(0.5, 1),
+                    Font = Enum.Font.Gotham,
+                    Text = "  " .. tabName .. "  ",
+                    TextColor3 = Color3.new(1, 1, 1),
+                    TextSize = 12,
+                    ZIndex = 100,
+                    Parent = item,
+                })
+                create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = tooltip })
+                tooltip.BackgroundTransparency = 1
+                tooltip.TextTransparency = 1
+                tween(tooltip, { BackgroundTransparency = 0.1, TextTransparency = 0 }, 0.15)
             end
         end)
         item.MouseLeave:Connect(function()
-            hoverFrame.BackgroundTransparency = 1
+            if window.CurrentTab ~= tab then
+                tween(hoverBg, { BackgroundTransparency = 1 }, 0.15)
+                tween(icon, { ImageColor3 = Color3.fromRGB(200, 200, 200) }, 0.15)
+            end
+            if tooltip then
+                local t = tooltip
+                tooltip = nil
+                tween(t, { BackgroundTransparency = 1, TextTransparency = 1 }, 0.1)
+                task.delay(0.12, function()
+                    if t and t.Parent then t:Destroy() end
+                end)
+            end
         end)
 
+        -- Content container for this tab
         local container = create("Frame", {
             Name = tabName .. "_Content",
             BackgroundTransparency = 1,
@@ -1021,31 +1264,55 @@ function WinUI:CreateWindow(options)
         end)
         tab.Container = container
         tab.Layout = contLayout
+        tab.Item = item
+        tab.IconImage = icon
+        tab.Indicator = indicator
+        tab.HoverBg = hoverBg
 
         local function selectTab()
-            -- Deselect previous
-            if window.CurrentTab and window.CurrentTab ~= tab then
+            if window.CurrentTab == tab then return end
+
+            -- Deselect previous with animation
+            if window.CurrentTab then
                 local prev = window.CurrentTab
                 if prev.Container then
                     prev.Container.Visible = false
                 end
                 if prev.Indicator then
-                    prev.Indicator.Visible = false
+                    tween(prev.Indicator, { BackgroundTransparency = 1, Size = UDim2.new(0.2, 0, 0, 3) }, 0.18)
                 end
-                if prev.Icon then
-                    prev.Icon.ImageColor3 = CurrentTheme.TextSecondary
+                if prev.IconImage then
+                    tween(prev.IconImage, { ImageColor3 = Color3.fromRGB(200, 200, 200) }, 0.18)
                 end
-                if prev.Label then
-                    prev.Label.TextColor3 = CurrentTheme.Text
+                if prev.HoverBg then
+                    tween(prev.HoverBg, { BackgroundTransparency = 1 }, 0.15)
                 end
             end
 
-            indicator.Visible = true
-            icon.ImageColor3 = AccentColor
-            label.TextColor3 = AccentColor
+            -- Select new
+            indicator.Size = UDim2.new(0.2, 0, 0, 3)
+            indicator.BackgroundTransparency = 0
+            tween(indicator, { Size = UDim2.new(0.55, 0, 0, 3) }, 0.25, Enum.EasingStyle.Back)
+            tween(icon, { ImageColor3 = AccentColor }, 0.2)
+            tween(hoverBg, { BackgroundTransparency = 0.55 }, 0.15)
+
+            -- Content fade-in
             container.Visible = true
+            container.BackgroundTransparency = 1
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("GuiObject") and child ~= contLayout then
+                    local orig = child.BackgroundTransparency
+                    child.BackgroundTransparency = 1
+                    if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
+                        local tOrig = child.TextTransparency
+                        child.TextTransparency = 1
+                        tween(child, { TextTransparency = tOrig or 0 }, 0.25)
+                    end
+                    tween(child, { BackgroundTransparency = orig }, 0.28)
+                end
+            end
+
             window.CurrentTab = tab
-            hoverFrame.BackgroundTransparency = 1
         end
 
         item.MouseButton1Click:Connect(selectTab)
@@ -1055,28 +1322,38 @@ function WinUI:CreateWindow(options)
         end
 
         table.insert(window.Tabs, tab)
-        tab.Item = item
-        tab.Indicator = indicator
-        tab.Icon = icon
-        tab.Label = label
 
-        -- Components
+        -- ========== Components (with better animations) ==========
+
         function tab:CreateSection(text)
             local section = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 28),
+                Size = UDim2.new(1, 0, 0, 30),
                 Parent = container,
             })
-            create("TextLabel", {
+            local lbl = create("TextLabel", {
                 BackgroundTransparency = 1,
                 Size = UDim2.new(1, 0, 1, 0),
                 Font = Enum.Font.GothamSemibold,
                 Text = text or "Section",
                 TextColor3 = CurrentTheme.Text,
-                TextSize = 14,
+                TextSize = 15,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = section,
             })
+            -- Underline accent
+            local line = create("Frame", {
+                BackgroundColor3 = AccentColor,
+                BackgroundTransparency = 0.6,
+                BorderSizePixel = 0,
+                Size = UDim2.new(0, 0, 0, 2),
+                Position = UDim2.new(0, 0, 1, -2),
+                Parent = section,
+            })
+            create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = line })
+            task.defer(function()
+                tween(line, { Size = UDim2.new(0, math.min(80, lbl.TextBounds.X), 0, 2) }, 0.35, Enum.EasingStyle.Quart)
+            end)
             return section
         end
 
@@ -1108,12 +1385,12 @@ function WinUI:CreateWindow(options)
                 Size = UDim2.new(1, 0, 0, 0),
                 Parent = container,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = para })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = para })
             create("UIPadding", {
-                PaddingTop = UDim.new(0, 10),
-                PaddingBottom = UDim.new(0, 10),
-                PaddingLeft = UDim.new(0, 12),
-                PaddingRight = UDim.new(0, 12),
+                PaddingTop = UDim.new(0, 12),
+                PaddingBottom = UDim.new(0, 12),
+                PaddingLeft = UDim.new(0, 14),
+                PaddingRight = UDim.new(0, 14),
                 Parent = para,
             })
             create("TextLabel", {
@@ -1141,8 +1418,8 @@ function WinUI:CreateWindow(options)
                 Parent = para,
             })
             local function updateSize()
-                local h = 32 + contentLbl.TextBounds.Y
-                para.Size = UDim2.new(1, 0, 0, math.max(50, h))
+                local h = 34 + contentLbl.TextBounds.Y
+                para.Size = UDim2.new(1, 0, 0, math.max(52, h))
             end
             contentLbl:GetPropertyChangedSignal("TextBounds"):Connect(updateSize)
             task.defer(updateSize)
@@ -1155,7 +1432,7 @@ function WinUI:CreateWindow(options)
             local desc = opts.Description
             local callback = opts.Callback or function() end
 
-            local height = desc and 52 or 36
+            local height = desc and 54 or 38
             local btn = create("TextButton", {
                 BackgroundColor3 = CurrentTheme.SecondaryBackground,
                 BorderSizePixel = 0,
@@ -1164,8 +1441,8 @@ function WinUI:CreateWindow(options)
                 AutoButtonColor = false,
                 Parent = container,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = btn })
-            create("UIStroke", {
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = btn })
+            local stroke = create("UIStroke", {
                 Color = CurrentTheme.Border,
                 Thickness = 1,
                 Parent = btn,
@@ -1173,8 +1450,8 @@ function WinUI:CreateWindow(options)
 
             local nameLbl = create("TextLabel", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(0, 12, 0, desc and 6 or 0),
-                Size = UDim2.new(1, -24, 0, 20),
+                Position = UDim2.new(0, 14, 0, desc and 7 or 0),
+                Size = UDim2.new(1, -28, 0, 20),
                 Font = Enum.Font.GothamSemibold,
                 Text = btnName,
                 TextColor3 = CurrentTheme.Text,
@@ -1185,8 +1462,8 @@ function WinUI:CreateWindow(options)
             if desc then
                 create("TextLabel", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(0, 12, 0, 26),
-                    Size = UDim2.new(1, -24, 0, 18),
+                    Position = UDim2.new(0, 14, 0, 28),
+                    Size = UDim2.new(1, -28, 0, 18),
                     Font = Enum.Font.Gotham,
                     Text = desc,
                     TextColor3 = CurrentTheme.TextSecondary,
@@ -1197,18 +1474,20 @@ function WinUI:CreateWindow(options)
             end
 
             btn.MouseEnter:Connect(function()
-                tween(btn, { BackgroundColor3 = AccentColor }, 0.12)
-                nameLbl.TextColor3 = Color3.new(1, 1, 1)
+                tween(btn, { BackgroundColor3 = AccentColor }, 0.15)
+                tween(nameLbl, { TextColor3 = Color3.new(1, 1, 1) }, 0.15)
+                tween(stroke, { Transparency = 1 }, 0.15)
             end)
             btn.MouseLeave:Connect(function()
-                tween(btn, { BackgroundColor3 = CurrentTheme.SecondaryBackground }, 0.12)
-                nameLbl.TextColor3 = CurrentTheme.Text
+                tween(btn, { BackgroundColor3 = CurrentTheme.SecondaryBackground }, 0.18)
+                tween(nameLbl, { TextColor3 = CurrentTheme.Text }, 0.18)
+                tween(stroke, { Transparency = 0 }, 0.18)
             end)
             btn.MouseButton1Down:Connect(function()
-                tween(btn, { BackgroundColor3 = AccentColor:Lerp(Color3.new(0, 0, 0), 0.15) }, 0.06)
+                tween(btn, { BackgroundColor3 = AccentColor:Lerp(Color3.new(0, 0, 0), 0.18) }, 0.06)
             end)
             btn.MouseButton1Up:Connect(function()
-                tween(btn, { BackgroundColor3 = AccentColor }, 0.06)
+                tween(btn, { BackgroundColor3 = AccentColor }, 0.08)
             end)
             btn.MouseButton1Click:Connect(function()
                 safeCall(callback)
@@ -1225,12 +1504,12 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 36),
+                Size = UDim2.new(1, 0, 0, 38),
                 Parent = container,
             })
             create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, -60, 1, 0),
+                Size = UDim2.new(1, -64, 1, 0),
                 Font = Enum.Font.Gotham,
                 Text = tName,
                 TextColor3 = CurrentTheme.Text,
@@ -1241,15 +1520,15 @@ function WinUI:CreateWindow(options)
 
             local track = create("Frame", {
                 BackgroundColor3 = current and AccentColor or CurrentTheme.ToggleOff,
-                Size = UDim2.new(0, 40, 0, 20),
-                Position = UDim2.new(1, -44, 0.5, -10),
+                Size = UDim2.new(0, 42, 0, 22),
+                Position = UDim2.new(1, -48, 0.5, -11),
                 Parent = frame,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = track })
             local knob = create("Frame", {
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 Size = UDim2.new(0, 16, 0, 16),
-                Position = current and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
+                Position = current and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8),
                 Parent = track,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = knob })
@@ -1257,8 +1536,10 @@ function WinUI:CreateWindow(options)
             local function set(val)
                 current = val
                 window.ConfigValues[flag] = val
-                tween(track, { BackgroundColor3 = val and AccentColor or CurrentTheme.ToggleOff }, 0.15)
-                tween(knob, { Position = val and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8) }, 0.15)
+                tween(track, { BackgroundColor3 = val and AccentColor or CurrentTheme.ToggleOff }, 0.18)
+                tween(knob, {
+                    Position = val and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+                }, 0.22, Enum.EasingStyle.Back)
                 safeCall(callback, val)
             end
 
@@ -1290,7 +1571,7 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 52),
+                Size = UDim2.new(1, 0, 0, 54),
                 Parent = container,
             })
             create("TextLabel", {
@@ -1305,20 +1586,20 @@ function WinUI:CreateWindow(options)
             })
             local valueLbl = create("TextLabel", {
                 BackgroundTransparency = 1,
-                Position = UDim2.new(1, -50, 0, 0),
-                Size = UDim2.new(0, 50, 0, 20),
-                Font = Enum.Font.Gotham,
+                Position = UDim2.new(1, -54, 0, 0),
+                Size = UDim2.new(0, 54, 0, 20),
+                Font = Enum.Font.GothamMedium,
                 Text = tostring(current),
-                TextColor3 = CurrentTheme.TextSecondary,
-                TextSize = 12,
+                TextColor3 = AccentColor,
+                TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Right,
                 Parent = frame,
             })
 
             local track = create("Frame", {
                 BackgroundColor3 = CurrentTheme.Border,
-                Size = UDim2.new(1, 0, 0, 4),
-                Position = UDim2.new(0, 0, 0, 32),
+                Size = UDim2.new(1, 0, 0, 5),
+                Position = UDim2.new(0, 0, 0, 34),
                 Parent = frame,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = track })
@@ -1330,39 +1611,48 @@ function WinUI:CreateWindow(options)
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = fill })
             local knob = create("Frame", {
                 BackgroundColor3 = Color3.new(1, 1, 1),
-                Size = UDim2.new(0, 14, 0, 14),
-                Position = UDim2.new((current - range[1]) / math.max(range[2] - range[1], 1), -7, 0.5, -7),
+                Size = UDim2.new(0, 16, 0, 16),
+                Position = UDim2.new((current - range[1]) / math.max(range[2] - range[1], 1), -8, 0.5, -8),
                 Parent = track,
             })
             create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = knob })
-            create("UIStroke", { Color = AccentColor, Thickness = 1, Parent = knob })
+            create("UIStroke", { Color = AccentColor, Thickness = 2, Parent = knob })
 
             local sliding = false
-            local function update(val)
+            local function update(val, animate)
                 val = clamp(math.floor(val / increment + 0.5) * increment, range[1], range[2])
                 current = val
                 window.ConfigValues[flag] = val
                 local pct = (val - range[1]) / math.max(range[2] - range[1], 1)
-                fill.Size = UDim2.new(pct, 0, 1, 0)
-                knob.Position = UDim2.new(pct, -7, 0.5, -7)
+                if animate then
+                    tween(fill, { Size = UDim2.new(pct, 0, 1, 0) }, 0.12)
+                    tween(knob, { Position = UDim2.new(pct, -8, 0.5, -8) }, 0.12)
+                else
+                    fill.Size = UDim2.new(pct, 0, 1, 0)
+                    knob.Position = UDim2.new(pct, -8, 0.5, -8)
+                end
                 valueLbl.Text = tostring(val)
                 safeCall(callback, val)
             end
 
             local function onInput(input)
                 local rel = (input.Position.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1)
-                update(range[1] + rel * (range[2] - range[1]))
+                update(range[1] + rel * (range[2] - range[1]), false)
             end
 
             track.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     sliding = true
                     onInput(input)
+                    tween(knob, { Size = UDim2.new(0, 18, 0, 18) }, 0.1)
                 end
             end)
             table.insert(window.Connections, UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    sliding = false
+                    if sliding then
+                        sliding = false
+                        tween(knob, { Size = UDim2.new(0, 16, 0, 16) }, 0.12)
+                    end
                 end
             end))
             table.insert(window.Connections, UserInputService.InputChanged:Connect(function(input)
@@ -1372,9 +1662,9 @@ function WinUI:CreateWindow(options)
             end))
 
             if window.ConfigValues[flag] ~= nil then
-                update(window.ConfigValues[flag])
+                update(window.ConfigValues[flag], true)
             end
-            return { Set = update, Get = function() return current end }
+            return { Set = function(v) update(v, true) end, Get = function() return current end }
         end
 
         function tab:CreateDropdown(opts)
@@ -1387,13 +1677,13 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 36),
+                Size = UDim2.new(1, 0, 0, 38),
                 ClipsDescendants = false,
                 Parent = container,
             })
             create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(0.45, 0, 1, 0),
+                Size = UDim2.new(0.42, 0, 1, 0),
                 Font = Enum.Font.Gotham,
                 Text = dName,
                 TextColor3 = CurrentTheme.Text,
@@ -1404,16 +1694,16 @@ function WinUI:CreateWindow(options)
 
             local dropBtn = create("TextButton", {
                 BackgroundColor3 = CurrentTheme.InputBackground,
-                Size = UDim2.new(0.5, 0, 0, 28),
-                Position = UDim2.new(0.5, 0, 0.5, -14),
-                Text = tostring(current) .. "  ▼",
+                Size = UDim2.new(0.55, 0, 0, 30),
+                Position = UDim2.new(0.45, 0, 0.5, -15),
+                Text = tostring(current) .. "  ▾",
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 12,
                 Font = Enum.Font.Gotham,
                 AutoButtonColor = false,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = dropBtn })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = dropBtn })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = dropBtn })
 
             local open = false
@@ -1424,18 +1714,23 @@ function WinUI:CreateWindow(options)
                     if listFrame then listFrame:Destroy() end
                     listFrame = create("Frame", {
                         BackgroundColor3 = CurrentTheme.SecondaryBackground,
-                        Size = UDim2.new(0.5, 0, 0, math.min(#optionsList * 28, 140)),
-                        Position = UDim2.new(0.5, 0, 1, 4),
+                        Size = UDim2.new(0.55, 0, 0, 0),
+                        Position = UDim2.new(0.45, 0, 1, 6),
                         ZIndex = 50,
+                        ClipsDescendants = true,
                         Parent = frame,
                     })
-                    create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = listFrame })
+                    create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = listFrame })
                     create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = listFrame })
-                    create("UIListLayout", { Parent = listFrame })
-                    for _, opt in ipairs(optionsList) do
+                    local listLayout = create("UIListLayout", { Parent = listFrame })
+
+                    local targetH = math.min(#optionsList * 30, 150)
+                    tween(listFrame, { Size = UDim2.new(0.55, 0, 0, targetH) }, 0.22, Enum.EasingStyle.Quart)
+
+                    for i, opt in ipairs(optionsList) do
                         local optBtn = create("TextButton", {
                             BackgroundTransparency = 1,
-                            Size = UDim2.new(1, 0, 0, 28),
+                            Size = UDim2.new(1, 0, 0, 30),
                             Text = "  " .. tostring(opt),
                             TextColor3 = CurrentTheme.Text,
                             TextSize = 12,
@@ -1445,35 +1740,44 @@ function WinUI:CreateWindow(options)
                             Parent = listFrame,
                         })
                         optBtn.MouseEnter:Connect(function()
-                            optBtn.BackgroundTransparency = 0.85
-                            optBtn.BackgroundColor3 = AccentColor
+                            tween(optBtn, { BackgroundTransparency = 0.85, BackgroundColor3 = AccentColor }, 0.1)
                         end)
                         optBtn.MouseLeave:Connect(function()
-                            optBtn.BackgroundTransparency = 1
+                            tween(optBtn, { BackgroundTransparency = 1 }, 0.1)
                         end)
                         optBtn.MouseButton1Click:Connect(function()
                             current = opt
                             window.ConfigValues[flag] = opt
-                            dropBtn.Text = tostring(current) .. "  ▼"
+                            dropBtn.Text = tostring(current) .. "  ▾"
                             safeCall(callback, opt)
-                            if listFrame then listFrame:Destroy() end
+                            if listFrame then
+                                tween(listFrame, { Size = UDim2.new(0.55, 0, 0, 0) }, 0.15)
+                                task.delay(0.16, function()
+                                    if listFrame then listFrame:Destroy() end
+                                end)
+                            end
                             open = false
                         end)
                     end
                 else
-                    if listFrame then listFrame:Destroy() end
+                    if listFrame then
+                        tween(listFrame, { Size = UDim2.new(0.55, 0, 0, 0) }, 0.15)
+                        task.delay(0.16, function()
+                            if listFrame then listFrame:Destroy() end
+                        end)
+                    end
                 end
             end)
 
             if window.ConfigValues[flag] ~= nil then
                 current = window.ConfigValues[flag]
-                dropBtn.Text = tostring(current) .. "  ▼"
+                dropBtn.Text = tostring(current) .. "  ▾"
             end
 
             return {
                 Set = function(v)
                     current = v
-                    dropBtn.Text = tostring(v) .. "  ▼"
+                    dropBtn.Text = tostring(v) .. "  ▾"
                     window.ConfigValues[flag] = v
                 end,
                 Get = function() return current end,
@@ -1489,12 +1793,12 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 36),
+                Size = UDim2.new(1, 0, 0, 38),
                 Parent = container,
             })
             create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(0.4, 0, 1, 0),
+                Size = UDim2.new(0.38, 0, 1, 0),
                 Font = Enum.Font.Gotham,
                 Text = iName,
                 TextColor3 = CurrentTheme.Text,
@@ -1504,8 +1808,8 @@ function WinUI:CreateWindow(options)
             })
             local box = create("TextBox", {
                 BackgroundColor3 = CurrentTheme.InputBackground,
-                Size = UDim2.new(0.55, 0, 0, 28),
-                Position = UDim2.new(0.45, 0, 0.5, -14),
+                Size = UDim2.new(0.58, 0, 0, 30),
+                Position = UDim2.new(0.42, 0, 0.5, -15),
                 Font = Enum.Font.Gotham,
                 PlaceholderText = placeholder,
                 PlaceholderColor3 = CurrentTheme.TextSecondary,
@@ -1515,11 +1819,15 @@ function WinUI:CreateWindow(options)
                 ClearTextOnFocus = false,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = box })
-            create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = box })
-            create("UIPadding", { PaddingLeft = UDim.new(0, 8), Parent = box })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = box })
+            local stroke = create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = box })
+            create("UIPadding", { PaddingLeft = UDim.new(0, 10), Parent = box })
 
+            box.Focused:Connect(function()
+                tween(stroke, { Color = AccentColor, Thickness = 1.5 }, 0.15)
+            end)
             box.FocusLost:Connect(function()
+                tween(stroke, { Color = CurrentTheme.Border, Thickness = 1 }, 0.15)
                 window.ConfigValues[flag] = box.Text
                 safeCall(callback, box.Text)
             end)
@@ -1534,7 +1842,7 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 36),
+                Size = UDim2.new(1, 0, 0, 38),
                 Parent = container,
             })
             create("TextLabel", {
@@ -1549,27 +1857,31 @@ function WinUI:CreateWindow(options)
             })
             local keyBtn = create("TextButton", {
                 BackgroundColor3 = CurrentTheme.InputBackground,
-                Size = UDim2.new(0, 100, 0, 26),
-                Position = UDim2.new(1, -110, 0.5, -13),
+                Size = UDim2.new(0, 110, 0, 28),
+                Position = UDim2.new(1, -118, 0.5, -14),
                 Text = current.Name,
                 TextColor3 = CurrentTheme.Text,
                 TextSize = 12,
                 Font = Enum.Font.Gotham,
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = keyBtn })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = keyBtn })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = keyBtn })
 
             local listening = false
             keyBtn.MouseButton1Click:Connect(function()
                 listening = true
                 keyBtn.Text = "..."
+                tween(keyBtn, { BackgroundColor3 = AccentColor }, 0.12)
+                keyBtn.TextColor3 = Color3.new(1, 1, 1)
             end)
             table.insert(window.Connections, UserInputService.InputBegan:Connect(function(input, gp)
                 if listening and input.UserInputType == Enum.UserInputType.Keyboard then
                     current = input.KeyCode
                     keyBtn.Text = current.Name
                     listening = false
+                    tween(keyBtn, { BackgroundColor3 = CurrentTheme.InputBackground }, 0.15)
+                    keyBtn.TextColor3 = CurrentTheme.Text
                     safeCall(callback, current)
                 end
             end))
@@ -1584,12 +1896,12 @@ function WinUI:CreateWindow(options)
 
             local frame = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 36),
+                Size = UDim2.new(1, 0, 0, 38),
                 Parent = container,
             })
             create("TextLabel", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(0.5, 1, 0),
+                Size = UDim2.new(0.5, 0, 1, 0),
                 Font = Enum.Font.Gotham,
                 Text = cName,
                 TextColor3 = CurrentTheme.Text,
@@ -1599,12 +1911,12 @@ function WinUI:CreateWindow(options)
             })
             local preview = create("TextButton", {
                 BackgroundColor3 = color,
-                Size = UDim2.new(0, 28, 0, 28),
-                Position = UDim2.new(1, -36, 0.5, -14),
+                Size = UDim2.new(0, 30, 0, 30),
+                Position = UDim2.new(1, -38, 0.5, -15),
                 Text = "",
                 Parent = frame,
             })
-            create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = preview })
+            create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = preview })
             create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = preview })
 
             local accents = {
@@ -1624,7 +1936,7 @@ function WinUI:CreateWindow(options)
             preview.MouseButton1Click:Connect(function()
                 idx = idx % #accents + 1
                 color = accents[idx]
-                preview.BackgroundColor3 = color
+                tween(preview, { BackgroundColor3 = color }, 0.15)
                 safeCall(callback, color)
             end)
             return {
@@ -1640,23 +1952,24 @@ function WinUI:CreateWindow(options)
     end
 
     function window:CreateSearch()
+        -- Optional search box that can be placed in content if needed
         local searchFrame = create("Frame", {
             BackgroundColor3 = CurrentTheme.InputBackground,
-            Size = UDim2.new(1, -12, 0, 28),
-            Parent = sidebar,
+            Size = UDim2.new(1, 0, 0, 32),
+            Parent = contentScroll,
         })
-        create("UICorner", { CornerRadius = UDim.new(0, 4), Parent = searchFrame })
+        create("UICorner", { CornerRadius = UDim.new(0, 6), Parent = searchFrame })
         create("UIStroke", { Color = CurrentTheme.Border, Thickness = 1, Parent = searchFrame })
         local box = create("TextBox", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, -10, 1, 0),
-            Position = UDim2.new(0, 8, 0, 0),
+            Size = UDim2.new(1, -14, 1, 0),
+            Position = UDim2.new(0, 10, 0, 0),
             Font = Enum.Font.Gotham,
             PlaceholderText = "Search...",
             PlaceholderColor3 = CurrentTheme.TextSecondary,
             Text = "",
             TextColor3 = CurrentTheme.Text,
-            TextSize = 12,
+            TextSize = 13,
             Parent = searchFrame,
         })
         return box
@@ -1674,49 +1987,29 @@ function WinUI:CreateWindow(options)
         Windows[windowId] = nil
     end
 
-    -- Open animation
+    -- ============================================================
+    -- Boot loading animation + open sequence
+    -- ============================================================
+    main.Visible = false
     main.Size = UDim2.new(0, 0, 0, 0)
     main.BackgroundTransparency = 1
-    tween(main, { Size = mainSize, BackgroundTransparency = 0 }, 0.28, Enum.EasingStyle.Quart)
 
-    Windows[windowId] = window
-
-    if options.LoadingTitle then
-        local loading = create("Frame", {
-            BackgroundColor3 = CurrentTheme.Background,
-            Size = UDim2.new(1, 0, 1, 0),
-            ZIndex = 100,
-            Parent = main,
-        })
-        create("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 30),
-            Position = UDim2.new(0, 0, 0.4, 0),
-            Font = Enum.Font.GothamSemibold,
-            Text = loadingTitle,
-            TextColor3 = CurrentTheme.Text,
-            TextSize = 18,
-            Parent = loading,
-        })
-        create("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 22),
-            Position = UDim2.new(0, 0, 0.4, 32),
-            Font = Enum.Font.Gotham,
-            Text = loadingSubtitle,
-            TextColor3 = CurrentTheme.TextSecondary,
-            TextSize = 13,
-            Parent = loading,
-        })
-        task.delay(1.2, function()
-            tween(loading, { BackgroundTransparency = 1 }, 0.3)
-            task.wait(0.3)
-            if loading and loading.Parent then
-                loading:Destroy()
-            end
+    if showBoot then
+        local boot, closeBoot = createBootLoader(screenGui, loadingTitle, loadingSubtitle, AccentColor)
+        task.delay(bootDuration, function()
+            closeBoot()
+            task.wait(0.35)
+            main.Visible = true
+            main.Size = UDim2.new(0, 0, 0, 0)
+            main.BackgroundTransparency = 0.5
+            spring(main, { Size = mainSize, BackgroundTransparency = 0 }, 0.4)
         end)
+    else
+        main.Visible = true
+        spring(main, { Size = mainSize, BackgroundTransparency = 0 }, 0.35)
     end
 
+    Windows[windowId] = window
     return window
 end
 
