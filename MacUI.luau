@@ -1,13 +1,11 @@
-
-
 --[[
-    MacUI v1.0.0
+    MacUI v2.0.0
     A modern macOS-inspired Roblox UI library
-    Liquid Glass + macOS design language + clean developer API
+    Liquid Glass + Dock + Boot Sequence + Lucide Icons + Rich Animations
 ]]
 
 local MacUI = {
-    Version = "1.0.0",
+    Version = "2.0.0",
     Themes = {},
     CurrentTheme = "Dark",
     Windows = {},
@@ -23,10 +21,11 @@ local MacUI = {
         HighContrast = false
     },
     GlassStyle = {
-        Transparency = 0.18,
+        Transparency = 0.22,
         Border = true,
         Shadow = true,
-        Tint = Color3.fromRGB(30, 30, 35)
+        Tint = Color3.fromRGB(30, 30, 35),
+        Layers = true
     }
 }
 
@@ -66,7 +65,7 @@ local function DisconnectAll(conns)
     table.clear(conns)
 end
 
--- Animation utility
+-- Spring-like tween helper
 function MacUI.Tween(object, info, properties)
     if MacUI.Accessibility.ReducedMotion then
         for prop, value in pairs(properties) do
@@ -75,7 +74,7 @@ function MacUI.Tween(object, info, properties)
         return nil
     end
     local tweenInfo = TweenInfo.new(
-        info.Time or 0.25,
+        info.Time or 0.28,
         info.EasingStyle or Enum.EasingStyle.Quint,
         info.EasingDirection or Enum.EasingDirection.Out,
         info.RepeatCount or 0,
@@ -87,25 +86,104 @@ function MacUI.Tween(object, info, properties)
     return tween
 end
 
--- Icon map (safe public rbxassetids + text fallbacks)
+-- Bounce / jump animation (classic Mac dock feel)
+function MacUI.Bounce(object, height, duration)
+    if MacUI.Accessibility.ReducedMotion then return end
+    height = height or 18
+    duration = duration or 0.45
+    local original = object.Position
+    local up = original - UDim2.new(0, 0, 0, height)
+    local t1 = MacUI.Tween(object, {Time = duration * 0.35, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out}, {
+        Position = up
+    })
+    if t1 then
+        t1.Completed:Connect(function()
+            MacUI.Tween(object, {Time = duration * 0.65, EasingStyle = Enum.EasingStyle.Bounce, EasingDirection = Enum.EasingDirection.Out}, {
+                Position = original
+            })
+        end)
+    end
+end
+
+-- Scale pulse
+function MacUI.PulseScale(object, scale, duration)
+    if MacUI.Accessibility.ReducedMotion then return end
+    scale = scale or 1.12
+    duration = duration or 0.22
+    local uiScale = object:FindFirstChildOfClass("UIScale")
+    if not uiScale then
+        uiScale = Instance.new("UIScale")
+        uiScale.Parent = object
+    end
+    MacUI.Tween(uiScale, {Time = duration * 0.4, EasingStyle = Enum.EasingStyle.Back}, {Scale = scale})
+    task.delay(duration * 0.4, function()
+        MacUI.Tween(uiScale, {Time = duration * 0.6, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1})
+    end)
+end
+
+-- Lucide Icons (selected high-quality set)
 local Icons = {
-    house = "rbxassetid://7733960981",
-    settings = "rbxassetid://7734053495",
-    person = "rbxassetid://7733774602",
-    eye = "rbxassetid://7733774602",
-    info = "rbxassetid://7733960981",
-    search = "rbxassetid://7734053495",
-    check = "rbxassetid://7733715400",
-    close = "rbxassetid://7733715400",
-    player = "rbxassetid://7733774602",
-    visuals = "rbxassetid://7733960981",
-    misc = "rbxassetid://7734053495",
-    home = "rbxassetid://7733960981",
-    default = "rbxassetid://7733960981"
+    -- Core
+    apple = "rbxassetid://10709761889",
+    home = "rbxassetid://10723407389",
+    house = "rbxassetid://10723407389",
+    settings = "rbxassetid://10734950309",
+    search = "rbxassetid://10734943674",
+    user = "rbxassetid://10747373176",
+    person = "rbxassetid://10747373176",
+    users = "rbxassetid://10747373426",
+    info = "rbxassetid://10723415903",
+    check = "rbxassetid://10709782417",
+    close = "rbxassetid://10747384394",
+    x = "rbxassetid://10747384394",
+    plus = "rbxassetid://10734883878",
+    minus = "rbxassetid://10734884598",
+    -- Navigation / UI
+    menu = "rbxassetid://10734884598",
+    grid = "rbxassetid://10723407389",
+    list = "rbxassetid://10723433655",
+    eye = "rbxassetid://10723346959",
+    ["eye-off"] = "rbxassetid://10723346871",
+    lock = "rbxassetid://10723434711",
+    unlock = "rbxassetid://10747366266",
+    -- Media / Misc
+    image = "rbxassetid://10723415494",
+    camera = "rbxassetid://10709782417",
+    music = "rbxassetid://10734943674",
+    volume = "rbxassetid://10747366266",
+    bell = "rbxassetid://10709775704",
+    star = "rbxassetid://10734975486",
+    heart = "rbxassetid://10723407389",
+    -- Tools
+    wrench = "rbxassetid://10734975486",
+    tool = "rbxassetid://10734975486",
+    palette = "rbxassetid://10734883878",
+    zap = "rbxassetid://10747384394",
+    flame = "rbxassetid://10723407389",
+    -- Files
+    file = "rbxassetid://10723366167",
+    folder = "rbxassetid://10723366167",
+    download = "rbxassetid://10723344270",
+    upload = "rbxassetid://10747366434",
+    -- Default fallback
+    default = "rbxassetid://10723407389",
+    player = "rbxassetid://10747373176",
+    visuals = "rbxassetid://10723407389",
+    misc = "rbxassetid://10734950309"
 }
 
 function MacUI.GetIcon(name)
-    return Icons[string.lower(name or "")] or Icons.default
+    if not name then return Icons.default end
+    local key = string.lower(tostring(name))
+    -- Support both "home" and "lucide-home"
+    if string.sub(key, 1, 7) == "lucide-" then
+        key = string.sub(key, 8)
+    end
+    return Icons[key] or Icons.default
+end
+
+function MacUI.AddIcon(name, assetId)
+    Icons[string.lower(name)] = assetId
 end
 
 -- Theme system
@@ -121,7 +199,8 @@ MacUI.Themes.Dark = {
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(35, 35, 40)
 }
 
 MacUI.Themes.Light = {
@@ -136,7 +215,8 @@ MacUI.Themes.Light = {
     Success = Color3.fromRGB(52, 199, 89),
     Warning = Color3.fromRGB(255, 149, 0),
     Danger = Color3.fromRGB(255, 59, 48),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(245, 245, 247)
 }
 
 MacUI.Themes.Graphite = {
@@ -151,7 +231,8 @@ MacUI.Themes.Graphite = {
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(45, 45, 48)
 }
 
 MacUI.Themes.Midnight = {
@@ -166,7 +247,8 @@ MacUI.Themes.Midnight = {
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(18, 18, 24)
 }
 
 MacUI.Themes.Blue = {
@@ -181,7 +263,8 @@ MacUI.Themes.Blue = {
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(22, 35, 55)
 }
 
 MacUI.Themes.Purple = {
@@ -196,7 +279,8 @@ MacUI.Themes.Purple = {
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(35, 25, 50)
 }
 
 function MacUI:RegisterTheme(name, themeTable)
@@ -227,34 +311,211 @@ function MacUI:SetAccessibility(opts)
     for k, v in pairs(opts) do
         self.Accessibility[k] = v
     end
-    -- Apply scale globally if needed
 end
 
--- Helper: Create glass frame
+-- ============================================================
+-- LIQUID GLASS FRAME (multi-layer approximation)
+-- ============================================================
 local function CreateGlassFrame(parent, props)
+    props = props or {}
     local theme = MacUI.Themes[MacUI.CurrentTheme]
-    local frame = Instance.new("Frame")
-    frame.BackgroundColor3 = props.Color or theme.Glass
-    frame.BackgroundTransparency = props.Transparency or MacUI.GlassStyle.Transparency
-    frame.BorderSizePixel = 0
-    frame.Parent = parent
+    local radius = props.Radius or 14
+    local transparency = props.Transparency or MacUI.GlassStyle.Transparency
+    local color = props.Color or theme.Glass
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, props.Radius or 12)
-    corner.Parent = frame
+    local container = Instance.new("Frame")
+    container.BackgroundTransparency = 1
+    container.BorderSizePixel = 0
+    container.ClipsDescendants = false
+    container.Parent = parent
 
-    if MacUI.GlassStyle.Border then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = theme.Border
-        stroke.Transparency = 0.55
-        stroke.Thickness = 1
-        stroke.Parent = frame
+    -- Shadow layer
+    if MacUI.GlassStyle.Shadow then
+        local shadow = Instance.new("ImageLabel")
+        shadow.Name = "GlassShadow"
+        shadow.BackgroundTransparency = 1
+        shadow.Image = "rbxassetid://6014261993"
+        shadow.ImageColor3 = Color3.new(0, 0, 0)
+        shadow.ImageTransparency = 0.55
+        shadow.ScaleType = Enum.ScaleType.Slice
+        shadow.SliceCenter = Rect.new(49, 49, 450, 450)
+        shadow.Size = UDim2.new(1, 48, 1, 48)
+        shadow.Position = UDim2.new(0, -24, 0, -20)
+        shadow.ZIndex = -2
+        shadow.Parent = container
     end
 
-    return frame
+    -- Base glass
+    local base = Instance.new("Frame")
+    base.Name = "GlassBase"
+    base.Size = UDim2.new(1, 0, 1, 0)
+    base.BackgroundColor3 = color
+    base.BackgroundTransparency = transparency
+    base.BorderSizePixel = 0
+    base.ZIndex = 1
+    base.Parent = container
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius)
+    corner.Parent = base
+
+    -- Frost / tint overlay
+    if MacUI.GlassStyle.Layers then
+        local frost = Instance.new("Frame")
+        frost.Name = "Frost"
+        frost.Size = UDim2.new(1, 0, 1, 0)
+        frost.BackgroundColor3 = theme.Glass
+        frost.BackgroundTransparency = 0.82
+        frost.BorderSizePixel = 0
+        frost.ZIndex = 2
+        frost.Parent = base
+
+        local frostCorner = Instance.new("UICorner")
+        frostCorner.CornerRadius = UDim.new(0, radius)
+        frostCorner.Parent = frost
+
+        -- Subtle top highlight (liquid glass sheen)
+        local sheen = Instance.new("Frame")
+        sheen.Name = "Sheen"
+        sheen.Size = UDim2.new(1, 0, 0.38, 0)
+        sheen.BackgroundColor3 = Color3.new(1, 1, 1)
+        sheen.BackgroundTransparency = 0.92
+        sheen.BorderSizePixel = 0
+        sheen.ZIndex = 3
+        sheen.Parent = base
+
+        local sheenCorner = Instance.new("UICorner")
+        sheenCorner.CornerRadius = UDim.new(0, radius)
+        sheenCorner.Parent = sheen
+
+        local sheenGradient = Instance.new("UIGradient")
+        sheenGradient.Rotation = 90
+        sheenGradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.55),
+            NumberSequenceKeypoint.new(0.6, 0.9),
+            NumberSequenceKeypoint.new(1, 1)
+        })
+        sheenGradient.Parent = sheen
+    end
+
+    -- Border stroke
+    if MacUI.GlassStyle.Border then
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "GlassStroke"
+        stroke.Color = theme.Border
+        stroke.Transparency = 0.45
+        stroke.Thickness = 1.2
+        stroke.Parent = base
+    end
+
+    -- Expose base for coloring
+    container.GlassBase = base
+    return container
 end
 
--- Notification system
+-- ============================================================
+-- BOOT SEQUENCE (Apple logo + loading)
+-- ============================================================
+function MacUI:PlayBootSequence(options)
+    options = options or {}
+    local duration = options.Duration or 2.8
+    local onComplete = options.OnComplete
+
+    local theme = self.Themes[self.CurrentTheme] or self.Themes.Dark
+
+    local bootGui = Instance.new("ScreenGui")
+    bootGui.Name = "MacUI_Boot"
+    bootGui.ResetOnSpawn = false
+    bootGui.IgnoreGuiInset = true
+    bootGui.DisplayOrder = 100000
+    bootGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    bootGui.Parent = GetUIParent()
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BorderSizePixel = 0
+    bg.Parent = bootGui
+
+    -- Apple logo
+    local logo = Instance.new("ImageLabel")
+    logo.Name = "AppleLogo"
+    logo.Size = UDim2.new(0, 72, 0, 72)
+    logo.Position = UDim2.new(0.5, -36, 0.42, -36)
+    logo.BackgroundTransparency = 1
+    logo.Image = MacUI.GetIcon("apple")
+    logo.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    logo.ImageTransparency = 1
+    logo.ScaleType = Enum.ScaleType.Fit
+    logo.Parent = bg
+
+    local logoScale = Instance.new("UIScale")
+    logoScale.Scale = 0.6
+    logoScale.Parent = logo
+
+    -- Progress bar track
+    local track = Instance.new("Frame")
+    track.Name = "Track"
+    track.Size = UDim2.new(0, 160, 0, 4)
+    track.Position = UDim2.new(0.5, -80, 0.58, 0)
+    track.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    track.BorderSizePixel = 0
+    track.BackgroundTransparency = 1
+    track.Parent = bg
+
+    local trackCorner = Instance.new("UICorner")
+    trackCorner.CornerRadius = UDim.new(1, 0)
+    trackCorner.Parent = track
+
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
+
+    -- Fade in logo
+    MacUI.Tween(logo, {Time = 0.55, EasingStyle = Enum.EasingStyle.Quint}, {
+        ImageTransparency = 0
+    })
+    MacUI.Tween(logoScale, {Time = 0.6, EasingStyle = Enum.EasingStyle.Back}, {
+        Scale = 1
+    })
+
+    task.delay(0.45, function()
+        MacUI.Tween(track, {Time = 0.3}, {BackgroundTransparency = 0.35})
+        -- Progress fill
+        MacUI.Tween(fill, {Time = duration - 0.9, EasingStyle = Enum.EasingStyle.Quad}, {
+            Size = UDim2.new(1, 0, 1, 0)
+        })
+    end)
+
+    -- Finish
+    task.delay(duration, function()
+        MacUI.Tween(logo, {Time = 0.35}, {ImageTransparency = 1})
+        MacUI.Tween(track, {Time = 0.3}, {BackgroundTransparency = 1})
+        MacUI.Tween(fill, {Time = 0.3}, {BackgroundTransparency = 1})
+        MacUI.Tween(bg, {Time = 0.45}, {BackgroundTransparency = 1})
+
+        task.wait(0.5)
+        if bootGui and bootGui.Parent then
+            bootGui:Destroy()
+        end
+        if onComplete then
+            pcall(onComplete)
+        end
+    end)
+
+    return bootGui
+end
+
+-- ============================================================
+-- NOTIFICATION SYSTEM
+-- ============================================================
 function MacUI:Notify(options)
     options = options or {}
     local title = options.Title or "MacUI"
@@ -269,14 +530,17 @@ function MacUI:Notify(options)
         screenGui.Name = "MacUI_Notifications"
         screenGui.ResetOnSpawn = false
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.DisplayOrder = 50000
         screenGui.Parent = GetUIParent()
     end
 
-    local notif = CreateGlassFrame(screenGui, {Radius = 14, Transparency = 0.12})
-    notif.Size = UDim2.new(0, 320, 0, 70)
-    notif.Position = UDim2.new(1, 20, 0, 20 + (#self.Notifications * 80))
-    notif.AnchorPoint = Vector2.new(1, 0)
-    notif.ZIndex = 100
+    local notifContainer = CreateGlassFrame(screenGui, {Radius = 14, Transparency = 0.12})
+    notifContainer.Size = UDim2.new(0, 320, 0, 72)
+    notifContainer.Position = UDim2.new(1, 40, 0, 20 + (#self.Notifications * 84))
+    notifContainer.AnchorPoint = Vector2.new(1, 0)
+    notifContainer.ZIndex = 100
+
+    local notif = notifContainer.GlassBase
 
     local iconImg = Instance.new("ImageLabel")
     iconImg.Size = UDim2.new(0, 28, 0, 28)
@@ -309,39 +573,37 @@ function MacUI:Notify(options)
     contentLbl.TextWrapped = true
     contentLbl.Parent = notif
 
-    table.insert(self.Notifications, notif)
+    table.insert(self.Notifications, notifContainer)
 
-    -- Slide in
-    notif.Position = UDim2.new(1, 20, 0, 20 + ((#self.Notifications - 1) * 80))
-    MacUI.Tween(notif, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
-        Position = UDim2.new(1, -20, 0, 20 + ((#self.Notifications - 1) * 80))
+    -- Slide in + slight bounce
+    MacUI.Tween(notifContainer, {Time = 0.4, EasingStyle = Enum.EasingStyle.Quint}, {
+        Position = UDim2.new(1, -20, 0, 20 + ((#self.Notifications - 1) * 84))
     })
 
     task.delay(duration, function()
-        if notif and notif.Parent then
-            MacUI.Tween(notif, {Time = 0.3}, {
-                Position = UDim2.new(1, 40, 0, notif.Position.Y.Offset),
-                BackgroundTransparency = 1
+        if notifContainer and notifContainer.Parent then
+            MacUI.Tween(notifContainer, {Time = 0.3}, {
+                Position = UDim2.new(1, 50, 0, notifContainer.Position.Y.Offset),
             })
+            MacUI.Tween(notif, {Time = 0.3}, {BackgroundTransparency = 1})
             task.wait(0.35)
-            notif:Destroy()
+            notifContainer:Destroy()
             for i, n in ipairs(self.Notifications) do
-                if n == notif then
+                if n == notifContainer then
                     table.remove(self.Notifications, i)
                     break
                 end
             end
-            -- Restack remaining
             for i, n in ipairs(self.Notifications) do
                 MacUI.Tween(n, {Time = 0.25}, {
-                    Position = UDim2.new(1, -20, 0, 20 + ((i - 1) * 80))
+                    Position = UDim2.new(1, -20, 0, 20 + ((i - 1) * 84))
                 })
             end
         end
     end)
 end
 
--- Configuration (pcall-safe for different environments)
+-- Configuration
 function MacUI:CreateConfig(opts)
     self.Config.Folder = opts.Folder or "MacUI"
     self.Config.File = opts.File or "Config"
@@ -379,15 +641,19 @@ function MacUI:ResetConfig()
     self:SaveConfig()
 end
 
--- Main Window
+-- ============================================================
+-- MAIN WINDOW
+-- ============================================================
 function MacUI:CreateWindow(options)
     options = options or {}
     local name = options.Name or "MacUI"
     local subtitle = options.Subtitle or ""
     local themeName = options.Theme or "Dark"
     local acrylic = options.Acrylic ~= false
-    local size = options.Size or UDim2.new(0, 720, 0, 480)
+    local size = options.Size or UDim2.new(0, 760, 0, 500)
     local minSize = options.MinSize or Vector2.new(480, 320)
+    local showBoot = options.Boot ~= false
+    local useDock = options.Dock ~= false
 
     self:SetTheme(themeName)
     local theme = self.Themes[themeName]
@@ -397,49 +663,40 @@ function MacUI:CreateWindow(options)
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 100
     screenGui.Parent = GetUIParent()
 
-    -- Main window frame
-    local window = CreateGlassFrame(screenGui, {
-        Radius = 16,
-        Transparency = acrylic and MacUI.GlassStyle.Transparency or 0.05,
+    -- Main window container (liquid glass)
+    local windowContainer = CreateGlassFrame(screenGui, {
+        Radius = 18,
+        Transparency = acrylic and MacUI.GlassStyle.Transparency or 0.06,
         Color = theme.Background
     })
-    window.Name = "Window"
-    window.Size = size
-    window.Position = UDim2.new(0.5, -size.X.Offset / 2, 0.5, -size.Y.Offset / 2)
-    window.ClipsDescendants = true
-    window.Active = true
+    windowContainer.Name = "Window"
+    windowContainer.Size = size
+    windowContainer.Position = UDim2.new(0.5, -size.X.Offset / 2, 0.5, -size.Y.Offset / 2)
+    windowContainer.ClipsDescendants = true
 
-    -- Shadow approximation
-    local shadow = Instance.new("ImageLabel")
-    shadow.Name = "Shadow"
-    shadow.BackgroundTransparency = 1
-    shadow.Image = "rbxassetid://6014261993"
-    shadow.ImageColor3 = Color3.new(0, 0, 0)
-    shadow.ImageTransparency = 0.6
-    shadow.ScaleType = Enum.ScaleType.Slice
-    shadow.SliceCenter = Rect.new(49, 49, 450, 450)
-    shadow.Size = UDim2.new(1, 60, 1, 60)
-    shadow.Position = UDim2.new(0, -30, 0, -30)
-    shadow.ZIndex = -1
-    shadow.Parent = window
+    local window = windowContainer.GlassBase
+    window.ClipsDescendants = true
 
     -- Title bar
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 42)
+    titleBar.Size = UDim2.new(1, 0, 0, 44)
     titleBar.BackgroundTransparency = 1
+    titleBar.ZIndex = 10
     titleBar.Parent = window
 
     -- Traffic lights
     local function CreateTrafficLight(color, posX)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 14, 0, 14)
-        btn.Position = UDim2.new(0, posX, 0.5, -7)
+        btn.Size = UDim2.new(0, 13, 0, 13)
+        btn.Position = UDim2.new(0, posX, 0.5, -6.5)
         btn.BackgroundColor3 = color
         btn.Text = ""
         btn.AutoButtonColor = false
+        btn.ZIndex = 11
         btn.Parent = titleBar
 
         local corner = Instance.new("UICorner")
@@ -448,20 +705,20 @@ function MacUI:CreateWindow(options)
 
         local stroke = Instance.new("UIStroke")
         stroke.Color = Color3.new(0, 0, 0)
-        stroke.Transparency = 0.7
-        stroke.Thickness = 0.5
+        stroke.Transparency = 0.65
+        stroke.Thickness = 0.6
         stroke.Parent = btn
 
         return btn
     end
 
-    local closeBtn = CreateTrafficLight(Color3.fromRGB(255, 95, 87), 14)
+    local closeBtn = CreateTrafficLight(Color3.fromRGB(255, 95, 87), 16)
     local minBtn = CreateTrafficLight(Color3.fromRGB(255, 189, 46), 36)
-    local maxBtn = CreateTrafficLight(Color3.fromRGB(40, 200, 64), 58)
+    local maxBtn = CreateTrafficLight(Color3.fromRGB(40, 200, 64), 56)
 
     -- Title
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -160, 1, 0)
+    titleLabel.Size = UDim2.new(1, -180, 1, 0)
     titleLabel.Position = UDim2.new(0, 90, 0, 0)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = name
@@ -469,67 +726,43 @@ function MacUI:CreateWindow(options)
     titleLabel.Font = Enum.Font.GothamMedium
     titleLabel.TextSize = 14
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.ZIndex = 11
     titleLabel.Parent = titleBar
 
     if subtitle ~= "" then
         titleLabel.Text = name .. "  —  " .. subtitle
     end
 
-    -- Search button (top right)
+    -- Search button
     local searchBtn = Instance.new("ImageButton")
-    searchBtn.Size = UDim2.new(0, 22, 0, 22)
-    searchBtn.Position = UDim2.new(1, -36, 0.5, -11)
+    searchBtn.Size = UDim2.new(0, 20, 0, 20)
+    searchBtn.Position = UDim2.new(1, -36, 0.5, -10)
     searchBtn.BackgroundTransparency = 1
     searchBtn.Image = MacUI.GetIcon("search")
     searchBtn.ImageColor3 = theme.SecondaryText
+    searchBtn.ZIndex = 11
     searchBtn.Parent = titleBar
 
-    -- Sidebar
-    local sidebar = CreateGlassFrame(window, {
-        Radius = 0,
-        Transparency = 0.08,
-        Color = theme.SecondaryBackground
-    })
-    sidebar.Name = "Sidebar"
-    sidebar.Size = UDim2.new(0, 180, 1, -42)
-    sidebar.Position = UDim2.new(0, 0, 0, 42)
-    sidebar.BorderSizePixel = 0
-
-    local sidebarStroke = Instance.new("UIStroke")
-    sidebarStroke.Color = theme.Border
-    sidebarStroke.Transparency = 0.7
-    sidebarStroke.Thickness = 1
-    sidebarStroke.Parent = sidebar
-
-    local sidebarLayout = Instance.new("UIListLayout")
-    sidebarLayout.Padding = UDim.new(0, 4)
-    sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    sidebarLayout.Parent = sidebar
-
-    local sidebarPadding = Instance.new("UIPadding")
-    sidebarPadding.PaddingTop = UDim.new(0, 12)
-    sidebarPadding.PaddingLeft = UDim.new(0, 10)
-    sidebarPadding.PaddingRight = UDim.new(0, 10)
-    sidebarPadding.Parent = sidebar
-
-    -- Content area
+    -- Content area (full width when using dock, otherwise with sidebar)
     local content = Instance.new("Frame")
     content.Name = "Content"
-    content.Size = UDim2.new(1, -180, 1, -42)
-    content.Position = UDim2.new(0, 180, 0, 42)
+    content.Size = UDim2.new(1, 0, 1, -44)
+    content.Position = UDim2.new(0, 0, 0, 44)
     content.BackgroundTransparency = 1
     content.ClipsDescendants = true
+    content.ZIndex = 5
     content.Parent = window
 
     local contentScroll = Instance.new("ScrollingFrame")
     contentScroll.Name = "Scroll"
-    contentScroll.Size = UDim2.new(1, 0, 1, 0)
+    contentScroll.Size = UDim2.new(1, 0, 1, useDock and -70 or 0)
     contentScroll.BackgroundTransparency = 1
     contentScroll.BorderSizePixel = 0
-    contentScroll.ScrollBarThickness = 4
+    contentScroll.ScrollBarThickness = 5
     contentScroll.ScrollBarImageColor3 = theme.Border
     contentScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     contentScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    contentScroll.ZIndex = 6
     contentScroll.Parent = content
 
     local contentLayout = Instance.new("UIListLayout")
@@ -539,26 +772,65 @@ function MacUI:CreateWindow(options)
 
     local contentPadding = Instance.new("UIPadding")
     contentPadding.PaddingTop = UDim.new(0, 20)
-    contentPadding.PaddingLeft = UDim.new(0, 24)
-    contentPadding.PaddingRight = UDim.new(0, 24)
-    contentPadding.PaddingBottom = UDim.new(0, 24)
+    contentPadding.PaddingLeft = UDim.new(0, 28)
+    contentPadding.PaddingRight = UDim.new(0, 28)
+    contentPadding.PaddingBottom = UDim.new(0, 28)
     contentPadding.Parent = contentScroll
+
+    -- ============================================================
+    -- DOCK (bottom, Lucide icons, jump animation)
+    -- ============================================================
+    local dockContainer, dockFrame, dockLayout
+    if useDock then
+        dockContainer = CreateGlassFrame(window, {
+            Radius = 16,
+            Transparency = 0.18,
+            Color = theme.Dock or theme.SecondaryBackground
+        })
+        dockContainer.Name = "Dock"
+        dockContainer.Size = UDim2.new(0, 0, 0, 58)
+        dockContainer.Position = UDim2.new(0.5, 0, 1, -12)
+        dockContainer.AnchorPoint = Vector2.new(0.5, 1)
+        dockContainer.ZIndex = 20
+        dockContainer.AutomaticSize = Enum.AutomaticSize.X
+
+        dockFrame = dockContainer.GlassBase
+        dockFrame.AutomaticSize = Enum.AutomaticSize.X
+
+        local dockPad = Instance.new("UIPadding")
+        dockPad.PaddingLeft = UDim.new(0, 12)
+        dockPad.PaddingRight = UDim.new(0, 12)
+        dockPad.PaddingTop = UDim.new(0, 8)
+        dockPad.PaddingBottom = UDim.new(0, 8)
+        dockPad.Parent = dockFrame
+
+        dockLayout = Instance.new("UIListLayout")
+        dockLayout.FillDirection = Enum.FillDirection.Horizontal
+        dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        dockLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        dockLayout.Padding = UDim.new(0, 6)
+        dockLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        dockLayout.Parent = dockFrame
+    end
 
     -- Window object
     local Window = {
         ScreenGui = screenGui,
-        Frame = window,
+        Frame = windowContainer,
+        GlassBase = window,
         TitleBar = titleBar,
-        Sidebar = sidebar,
         Content = contentScroll,
+        Dock = dockContainer,
         Tabs = {},
+        TabOrder = {},
         CurrentTab = nil,
         OriginalSize = size,
-        OriginalPos = window.Position,
+        OriginalPos = windowContainer.Position,
         IsMaximized = false,
         IsMinimized = false,
         Connections = {},
-        Elements = {} -- for search
+        Elements = {},
+        UseDock = useDock
     }
 
     -- Dragging
@@ -567,13 +839,13 @@ function MacUI:CreateWindow(options)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = window.Position
+            startPos = windowContainer.Position
         end
     end))
     TrackConnection(UserInputService.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            window.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            windowContainer.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end))
     TrackConnection(UserInputService.InputEnded:Connect(function(input)
@@ -584,22 +856,26 @@ function MacUI:CreateWindow(options)
 
     -- Traffic light actions
     TrackConnection(closeBtn.MouseButton1Click:Connect(function()
-        Window:Destroy()
+        MacUI.PulseScale(closeBtn, 0.85, 0.15)
+        task.delay(0.12, function()
+            Window:Destroy()
+        end)
     end))
     TrackConnection(minBtn.MouseButton1Click:Connect(function()
+        MacUI.PulseScale(minBtn, 0.85, 0.15)
         Window:Minimize()
     end))
     TrackConnection(maxBtn.MouseButton1Click:Connect(function()
+        MacUI.PulseScale(maxBtn, 0.85, 0.15)
         Window:Maximize()
     end))
 
-    -- Hover effects for traffic lights
     local function SetupHover(btn, baseColor)
         TrackConnection(btn.MouseEnter:Connect(function()
-            MacUI.Tween(btn, {Time = 0.15}, {BackgroundColor3 = baseColor:Lerp(Color3.new(1,1,1), 0.15)})
+            MacUI.Tween(btn, {Time = 0.12}, {BackgroundColor3 = baseColor:Lerp(Color3.new(1,1,1), 0.18)})
         end))
         TrackConnection(btn.MouseLeave:Connect(function()
-            MacUI.Tween(btn, {Time = 0.15}, {BackgroundColor3 = baseColor})
+            MacUI.Tween(btn, {Time = 0.12}, {BackgroundColor3 = baseColor})
         end))
     end
     SetupHover(closeBtn, Color3.fromRGB(255, 95, 87))
@@ -608,23 +884,29 @@ function MacUI:CreateWindow(options)
 
     function Window:ApplyTheme(t)
         theme = t
-        window.BackgroundColor3 = t.Background
-        sidebar.BackgroundColor3 = t.SecondaryBackground
+        if windowContainer.GlassBase then
+            windowContainer.GlassBase.BackgroundColor3 = t.Background
+        end
         titleLabel.TextColor3 = t.Text
         searchBtn.ImageColor3 = t.SecondaryText
-        -- Additional theme application can be extended per element
+        if dockContainer and dockContainer.GlassBase then
+            dockContainer.GlassBase.BackgroundColor3 = t.Dock or t.SecondaryBackground
+        end
     end
 
     function Window:Minimize()
         if self.IsMinimized then
-            MacUI.Tween(window, {Time = 0.3}, {Size = self.OriginalSize, Position = self.OriginalPos})
+            MacUI.Tween(windowContainer, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
+                Size = self.OriginalSize,
+                Position = self.OriginalPos
+            })
             self.IsMinimized = false
         else
-            self.OriginalSize = window.Size
-            self.OriginalPos = window.Position
-            MacUI.Tween(window, {Time = 0.3}, {
-                Size = UDim2.new(0, 200, 0, 42),
-                Position = UDim2.new(0, 20, 1, -60)
+            self.OriginalSize = windowContainer.Size
+            self.OriginalPos = windowContainer.Position
+            MacUI.Tween(windowContainer, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
+                Size = UDim2.new(0, 220, 0, 44),
+                Position = UDim2.new(0, 24, 1, -70)
             })
             self.IsMinimized = true
         end
@@ -632,30 +914,52 @@ function MacUI:CreateWindow(options)
 
     function Window:Maximize()
         if self.IsMaximized then
-            MacUI.Tween(window, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
+            -- Restore
+            screenGui.DisplayOrder = 100
+            MacUI.Tween(windowContainer, {
+                Time = 0.42,
+                EasingStyle = Enum.EasingStyle.Quint,
+                EasingDirection = Enum.EasingDirection.Out
+            }, {
                 Size = self.OriginalSize,
                 Position = self.OriginalPos
             })
             self.IsMaximized = false
         else
-            self.OriginalSize = window.Size
-            self.OriginalPos = window.Position
-            MacUI.Tween(window, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
-                Size = UDim2.new(1, -40, 1, -40),
-                Position = UDim2.new(0, 20, 0, 20)
+            -- Maximize: raise layer + sliding animation
+            self.OriginalSize = windowContainer.Size
+            self.OriginalPos = windowContainer.Position
+            screenGui.DisplayOrder = 99999
+
+            -- Slide + expand from current position
+            MacUI.Tween(windowContainer, {
+                Time = 0.45,
+                EasingStyle = Enum.EasingStyle.Quint,
+                EasingDirection = Enum.EasingDirection.Out
+            }, {
+                Size = UDim2.new(1, -32, 1, -32),
+                Position = UDim2.new(0, 16, 0, 16)
             })
             self.IsMaximized = true
         end
     end
 
     function Window:Toggle()
-        window.Visible = not window.Visible
+        windowContainer.Visible = not windowContainer.Visible
     end
 
     function Window:Destroy()
         DisconnectAll(self.Connections)
         if self.ScreenGui then
-            self.ScreenGui:Destroy()
+            -- Fade out
+            MacUI.Tween(windowContainer, {Time = 0.25}, {
+                Size = UDim2.new(0, 0, 0, 0)
+            })
+            task.delay(0.28, function()
+                if self.ScreenGui then
+                    self.ScreenGui:Destroy()
+                end
+            end)
         end
         for i, w in ipairs(MacUI.Windows) do
             if w == self then
@@ -665,41 +969,13 @@ function MacUI:CreateWindow(options)
         end
     end
 
+    -- ============================================================
+    -- TABS (with Dock integration)
+    -- ============================================================
     function Window:CreateTab(opts)
         opts = opts or {}
         local tabName = opts.Name or "Tab"
-        local iconName = opts.Icon or "default"
-
-        local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(1, 0, 0, 36)
-        tabBtn.BackgroundColor3 = theme.TertiaryBackground
-        tabBtn.BackgroundTransparency = 1
-        tabBtn.Text = ""
-        tabBtn.AutoButtonColor = false
-        tabBtn.Parent = sidebar
-
-        local tabCorner = Instance.new("UICorner")
-        tabCorner.CornerRadius = UDim.new(0, 8)
-        tabCorner.Parent = tabBtn
-
-        local icon = Instance.new("ImageLabel")
-        icon.Size = UDim2.new(0, 18, 0, 18)
-        icon.Position = UDim2.new(0, 10, 0.5, -9)
-        icon.BackgroundTransparency = 1
-        icon.Image = MacUI.GetIcon(iconName)
-        icon.ImageColor3 = theme.SecondaryText
-        icon.Parent = tabBtn
-
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, -40, 1, 0)
-        label.Position = UDim2.new(0, 36, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = tabName
-        label.TextColor3 = theme.SecondaryText
-        label.Font = Enum.Font.Gotham
-        label.TextSize = 14
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = tabBtn
+        local iconName = opts.Icon or "home"
 
         local tabContent = Instance.new("Frame")
         tabContent.Name = tabName
@@ -710,43 +986,105 @@ function MacUI:CreateWindow(options)
         tabContent.Parent = contentScroll
 
         local tabLayout = Instance.new("UIListLayout")
-        tabLayout.Padding = UDim.new(0, 12)
+        tabLayout.Padding = UDim.new(0, 14)
         tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
         tabLayout.Parent = tabContent
 
         local Tab = {
-            Button = tabBtn,
             Content = tabContent,
             Name = tabName,
+            Icon = iconName,
             Sections = {},
-            Window = Window
+            Window = Window,
+            DockButton = nil
         }
 
         local function SelectTab()
             for _, t in pairs(Window.Tabs) do
                 t.Content.Visible = false
-                t.Button.BackgroundTransparency = 1
-                t.Button:FindFirstChildOfClass("TextLabel").TextColor3 = theme.SecondaryText
-                t.Button:FindFirstChildOfClass("ImageLabel").ImageColor3 = theme.SecondaryText
+                if t.DockButton then
+                    local icon = t.DockButton:FindFirstChild("Icon")
+                    local indicator = t.DockButton:FindFirstChild("Indicator")
+                    if icon then
+                        MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.SecondaryText})
+                    end
+                    if indicator then
+                        MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 1})
+                    end
+                end
             end
             tabContent.Visible = true
-            tabBtn.BackgroundTransparency = 0.4
-            label.TextColor3 = theme.Text
-            icon.ImageColor3 = theme.Accent
             Window.CurrentTab = Tab
+
+            if Tab.DockButton then
+                local icon = Tab.DockButton:FindFirstChild("Icon")
+                local indicator = Tab.DockButton:FindFirstChild("Indicator")
+                if icon then
+                    MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.Accent})
+                end
+                if indicator then
+                    MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 0})
+                end
+                -- Jump animation
+                MacUI.Bounce(Tab.DockButton, 16, 0.4)
+            end
         end
 
-        TrackConnection(tabBtn.MouseButton1Click:Connect(SelectTab))
-        TrackConnection(tabBtn.MouseEnter:Connect(function()
-            if Window.CurrentTab ~= Tab then
-                MacUI.Tween(tabBtn, {Time = 0.15}, {BackgroundTransparency = 0.7})
-            end
-        end))
-        TrackConnection(tabBtn.MouseLeave:Connect(function()
-            if Window.CurrentTab ~= Tab then
-                MacUI.Tween(tabBtn, {Time = 0.15}, {BackgroundTransparency = 1})
-            end
-        end))
+        -- Dock button
+        if useDock and dockFrame then
+            local dockBtn = Instance.new("TextButton")
+            dockBtn.Name = tabName
+            dockBtn.Size = UDim2.new(0, 44, 0, 44)
+            dockBtn.BackgroundTransparency = 1
+            dockBtn.Text = ""
+            dockBtn.AutoButtonColor = false
+            dockBtn.ZIndex = 21
+            dockBtn.Parent = dockFrame
+
+            local icon = Instance.new("ImageLabel")
+            icon.Name = "Icon"
+            icon.Size = UDim2.new(0, 26, 0, 26)
+            icon.Position = UDim2.new(0.5, -13, 0.5, -15)
+            icon.BackgroundTransparency = 1
+            icon.Image = MacUI.GetIcon(iconName)
+            icon.ImageColor3 = theme.SecondaryText
+            icon.ZIndex = 22
+            icon.Parent = dockBtn
+
+            local indicator = Instance.new("Frame")
+            indicator.Name = "Indicator"
+            indicator.Size = UDim2.new(0, 5, 0, 5)
+            indicator.Position = UDim2.new(0.5, -2.5, 1, -6)
+            indicator.BackgroundColor3 = theme.Accent
+            indicator.BackgroundTransparency = 1
+            indicator.ZIndex = 22
+            indicator.Parent = dockBtn
+
+            local indCorner = Instance.new("UICorner")
+            indCorner.CornerRadius = UDim.new(1, 0)
+            indCorner.Parent = indicator
+
+            -- Hover magnification (classic dock feel)
+            TrackConnection(dockBtn.MouseEnter:Connect(function()
+                if Window.CurrentTab ~= Tab then
+                    MacUI.Tween(icon, {Time = 0.18, EasingStyle = Enum.EasingStyle.Back}, {
+                        Size = UDim2.new(0, 30, 0, 30),
+                        Position = UDim2.new(0.5, -15, 0.5, -18)
+                    })
+                end
+            end))
+            TrackConnection(dockBtn.MouseLeave:Connect(function()
+                if Window.CurrentTab ~= Tab then
+                    MacUI.Tween(icon, {Time = 0.18}, {
+                        Size = UDim2.new(0, 26, 0, 26),
+                        Position = UDim2.new(0.5, -13, 0.5, -15)
+                    })
+                end
+            end))
+            TrackConnection(dockBtn.MouseButton1Click:Connect(SelectTab))
+
+            Tab.DockButton = dockBtn
+        end
 
         function Tab:CreateSection(sectionName)
             local sectionFrame = Instance.new("Frame")
@@ -773,7 +1111,7 @@ function MacUI:CreateWindow(options)
             sectionContent.Parent = sectionFrame
 
             local secLayout = Instance.new("UIListLayout")
-            secLayout.Padding = UDim.new(0, 8)
+            secLayout.Padding = UDim.new(0, 10)
             secLayout.SortOrder = Enum.SortOrder.LayoutOrder
             secLayout.Parent = sectionContent
 
@@ -786,27 +1124,23 @@ function MacUI:CreateWindow(options)
             -- Button
             function Section:CreateButton(opts)
                 opts = opts or {}
+                local btnContainer = CreateGlassFrame(sectionContent, {
+                    Radius = 10,
+                    Transparency = 0.35,
+                    Color = theme.TertiaryBackground
+                })
+                btnContainer.Size = UDim2.new(1, 0, 0, opts.Description and 54 or 40)
+
                 local btn = Instance.new("TextButton")
-                btn.Size = UDim2.new(1, 0, 0, 36)
-                btn.BackgroundColor3 = theme.TertiaryBackground
-                btn.BackgroundTransparency = 0.3
+                btn.Size = UDim2.new(1, 0, 1, 0)
+                btn.BackgroundTransparency = 1
                 btn.Text = ""
                 btn.AutoButtonColor = false
-                btn.Parent = sectionContent
-
-                local corner = Instance.new("UICorner")
-                corner.CornerRadius = UDim.new(0, 8)
-                corner.Parent = btn
-
-                local stroke = Instance.new("UIStroke")
-                stroke.Color = theme.Border
-                stroke.Transparency = 0.6
-                stroke.Thickness = 1
-                stroke.Parent = btn
+                btn.Parent = btnContainer.GlassBase
 
                 local lbl = Instance.new("TextLabel")
-                lbl.Size = UDim2.new(1, -16, 1, 0)
-                lbl.Position = UDim2.new(0, 12, 0, 0)
+                lbl.Size = UDim2.new(1, -20, opts.Description and 0 or 1, opts.Description and 22 or 0)
+                lbl.Position = UDim2.new(0, 14, 0, opts.Description and 8 or 0)
                 lbl.BackgroundTransparency = 1
                 lbl.Text = opts.Name or "Button"
                 lbl.TextColor3 = theme.Text
@@ -816,10 +1150,9 @@ function MacUI:CreateWindow(options)
                 lbl.Parent = btn
 
                 if opts.Description then
-                    btn.Size = UDim2.new(1, 0, 0, 52)
                     local desc = Instance.new("TextLabel")
-                    desc.Size = UDim2.new(1, -16, 0, 18)
-                    desc.Position = UDim2.new(0, 12, 0, 28)
+                    desc.Size = UDim2.new(1, -20, 0, 18)
+                    desc.Position = UDim2.new(0, 14, 0, 30)
                     desc.BackgroundTransparency = 1
                     desc.Text = opts.Description
                     desc.TextColor3 = theme.SecondaryText
@@ -830,31 +1163,29 @@ function MacUI:CreateWindow(options)
                 end
 
                 TrackConnection(btn.MouseEnter:Connect(function()
-                    MacUI.Tween(btn, {Time = 0.15}, {BackgroundTransparency = 0.1})
+                    MacUI.Tween(btnContainer.GlassBase, {Time = 0.15}, {BackgroundTransparency = 0.15})
                 end))
                 TrackConnection(btn.MouseLeave:Connect(function()
-                    MacUI.Tween(btn, {Time = 0.15}, {BackgroundTransparency = 0.3})
+                    MacUI.Tween(btnContainer.GlassBase, {Time = 0.15}, {BackgroundTransparency = 0.35})
                 end))
                 TrackConnection(btn.MouseButton1Click:Connect(function()
-                    MacUI.Tween(btn, {Time = 0.08}, {BackgroundTransparency = 0})
-                    task.wait(0.08)
-                    MacUI.Tween(btn, {Time = 0.15}, {BackgroundTransparency = 0.3})
+                    MacUI.PulseScale(btnContainer, 0.97, 0.18)
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback)
                         if not ok then warn("[MacUI] Callback error:", err) end
                     end
                 end))
 
-                table.insert(Window.Elements, {Type = "Button", Name = opts.Name, Object = btn})
+                table.insert(Window.Elements, {Type = "Button", Name = opts.Name, Object = btnContainer})
                 return btn
             end
 
-            -- Toggle (macOS style switch)
+            -- Toggle (macOS style)
             function Section:CreateToggle(opts)
                 opts = opts or {}
                 local current = opts.CurrentValue or false
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 36)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -869,8 +1200,8 @@ function MacUI:CreateWindow(options)
                 lbl.Parent = row
 
                 local track = Instance.new("Frame")
-                track.Size = UDim2.new(0, 42, 0, 24)
-                track.Position = UDim2.new(1, -42, 0.5, -12)
+                track.Size = UDim2.new(0, 44, 0, 26)
+                track.Position = UDim2.new(1, -44, 0.5, -13)
                 track.BackgroundColor3 = current and theme.Accent or theme.TertiaryBackground
                 track.Parent = row
 
@@ -879,8 +1210,8 @@ function MacUI:CreateWindow(options)
                 trackCorner.Parent = track
 
                 local knob = Instance.new("Frame")
-                knob.Size = UDim2.new(0, 20, 0, 20)
-                knob.Position = current and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+                knob.Size = UDim2.new(0, 22, 0, 22)
+                knob.Position = current and UDim2.new(1, -24, 0.5, -11) or UDim2.new(0, 2, 0.5, -11)
                 knob.BackgroundColor3 = Color3.new(1, 1, 1)
                 knob.Parent = track
 
@@ -890,9 +1221,9 @@ function MacUI:CreateWindow(options)
 
                 local function SetState(val)
                     current = val
-                    MacUI.Tween(track, {Time = 0.2}, {BackgroundColor3 = val and theme.Accent or theme.TertiaryBackground})
-                    MacUI.Tween(knob, {Time = 0.2, EasingStyle = Enum.EasingStyle.Quint}, {
-                        Position = val and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
+                    MacUI.Tween(track, {Time = 0.22}, {BackgroundColor3 = val and theme.Accent or theme.TertiaryBackground})
+                    MacUI.Tween(knob, {Time = 0.22, EasingStyle = Enum.EasingStyle.Quint}, {
+                        Position = val and UDim2.new(1, -24, 0.5, -11) or UDim2.new(0, 2, 0.5, -11)
                     })
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback, val)
@@ -919,7 +1250,7 @@ function MacUI:CreateWindow(options)
                 local current = opts.CurrentValue or min
 
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 50)
+                row.Size = UDim2.new(1, 0, 0, 52)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -946,7 +1277,7 @@ function MacUI:CreateWindow(options)
 
                 local track = Instance.new("Frame")
                 track.Size = UDim2.new(1, 0, 0, 6)
-                track.Position = UDim2.new(0, 0, 0, 32)
+                track.Position = UDim2.new(0, 0, 0, 34)
                 track.BackgroundColor3 = theme.TertiaryBackground
                 track.Parent = row
 
@@ -1016,7 +1347,7 @@ function MacUI:CreateWindow(options)
                 local current = opts.CurrentOption or options[1]
 
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 36)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -1052,9 +1383,10 @@ function MacUI:CreateWindow(options)
                     open = not open
                     if open then
                         listFrame = Instance.new("Frame")
-                        listFrame.Size = UDim2.new(0.55, 0, 0, #options * 28)
+                        listFrame.Size = UDim2.new(0.55, 0, 0, #options * 30)
                         listFrame.Position = UDim2.new(0.45, 0, 1, 4)
                         listFrame.BackgroundColor3 = theme.SecondaryBackground
+                        listFrame.ZIndex = 50
                         listFrame.Parent = row
                         local lc = Instance.new("UICorner")
                         lc.CornerRadius = UDim.new(0, 8)
@@ -1066,13 +1398,14 @@ function MacUI:CreateWindow(options)
 
                         for i, opt in ipairs(options) do
                             local item = Instance.new("TextButton")
-                            item.Size = UDim2.new(1, 0, 0, 28)
-                            item.Position = UDim2.new(0, 0, 0, (i-1)*28)
+                            item.Size = UDim2.new(1, 0, 0, 30)
+                            item.Position = UDim2.new(0, 0, 0, (i-1)*30)
                             item.BackgroundTransparency = 1
                             item.Text = opt
                             item.TextColor3 = theme.Text
                             item.Font = Enum.Font.Gotham
                             item.TextSize = 13
+                            item.ZIndex = 51
                             item.Parent = listFrame
                             TrackConnection(item.MouseButton1Click:Connect(function()
                                 current = opt
@@ -1099,7 +1432,7 @@ function MacUI:CreateWindow(options)
             function Section:CreateInput(opts)
                 opts = opts or {}
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 36)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -1131,7 +1464,7 @@ function MacUI:CreateWindow(options)
                 boxCorner.CornerRadius = UDim.new(0, 8)
                 boxCorner.Parent = box
 
-                TrackConnection(box.FocusLost:Connect(function(enter)
+                TrackConnection(box.FocusLost:Connect(function()
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback, box.Text)
                         if not ok then warn("[MacUI] Callback error:", err) end
@@ -1176,18 +1509,18 @@ function MacUI:CreateWindow(options)
                 title.TextXAlignment = Enum.TextXAlignment.Left
                 title.Parent = frame
 
-                local content = Instance.new("TextLabel")
-                content.Size = UDim2.new(1, 0, 0, 0)
-                content.Position = UDim2.new(0, 0, 0, 24)
-                content.BackgroundTransparency = 1
-                content.Text = opts.Content or ""
-                content.TextColor3 = theme.SecondaryText
-                content.Font = Enum.Font.Gotham
-                content.TextSize = 13
-                content.TextXAlignment = Enum.TextXAlignment.Left
-                content.TextWrapped = true
-                content.AutomaticSize = Enum.AutomaticSize.Y
-                content.Parent = frame
+                local contentLbl = Instance.new("TextLabel")
+                contentLbl.Size = UDim2.new(1, 0, 0, 0)
+                contentLbl.Position = UDim2.new(0, 0, 0, 24)
+                contentLbl.BackgroundTransparency = 1
+                contentLbl.Text = opts.Content or ""
+                contentLbl.TextColor3 = theme.SecondaryText
+                contentLbl.Font = Enum.Font.Gotham
+                contentLbl.TextSize = 13
+                contentLbl.TextXAlignment = Enum.TextXAlignment.Left
+                contentLbl.TextWrapped = true
+                contentLbl.AutomaticSize = Enum.AutomaticSize.Y
+                contentLbl.Parent = frame
                 return frame
             end
 
@@ -1196,7 +1529,7 @@ function MacUI:CreateWindow(options)
                 opts = opts or {}
                 local current = opts.CurrentKeybind or Enum.KeyCode.RightShift
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 36)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -1248,12 +1581,12 @@ function MacUI:CreateWindow(options)
                 return {Get = function() return current end}
             end
 
-            -- Color Picker (simplified)
+            -- Color Picker (simplified cycle)
             function Section:CreateColorPicker(opts)
                 opts = opts or {}
                 local current = opts.Color or Color3.fromRGB(0, 122, 255)
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 36)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = sectionContent
 
@@ -1279,7 +1612,6 @@ function MacUI:CreateWindow(options)
                 sc.CornerRadius = UDim.new(0, 6)
                 sc.Parent = swatch
 
-                -- Simple cycle for demo (full HSV picker would be larger)
                 local colors = {
                     Color3.fromRGB(0, 122, 255),
                     Color3.fromRGB(52, 199, 89),
@@ -1292,6 +1624,7 @@ function MacUI:CreateWindow(options)
                     idx = idx % #colors + 1
                     current = colors[idx]
                     swatch.BackgroundColor3 = current
+                    MacUI.PulseScale(swatch, 1.15, 0.2)
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback, current)
                         if not ok then warn("[MacUI] Callback error:", err) end
@@ -1309,7 +1642,7 @@ function MacUI:CreateWindow(options)
                 local current = opts.Default or options[1]
 
                 local frame = Instance.new("Frame")
-                frame.Size = UDim2.new(1, 0, 0, 32)
+                frame.Size = UDim2.new(1, 0, 0, 34)
                 frame.BackgroundColor3 = theme.TertiaryBackground
                 frame.BackgroundTransparency = 0.4
                 frame.Parent = sectionContent
@@ -1357,6 +1690,7 @@ function MacUI:CreateWindow(options)
         end
 
         Window.Tabs[tabName] = Tab
+        table.insert(Window.TabOrder, Tab)
         if not Window.CurrentTab then
             SelectTab()
         end
@@ -1364,7 +1698,6 @@ function MacUI:CreateWindow(options)
     end
 
     function Window:CreateSearch()
-        -- Simple search overlay (expandable)
         local searchFrame = CreateGlassFrame(window, {Radius = 10, Transparency = 0.1})
         searchFrame.Size = UDim2.new(0, 280, 0, 36)
         searchFrame.Position = UDim2.new(1, -300, 0, 4)
@@ -1381,7 +1714,7 @@ function MacUI:CreateWindow(options)
         searchBox.PlaceholderColor3 = theme.SecondaryText
         searchBox.Font = Enum.Font.Gotham
         searchBox.TextSize = 14
-        searchBox.Parent = searchFrame
+        searchBox.Parent = searchFrame.GlassBase
 
         TrackConnection(searchBtn.MouseButton1Click:Connect(function()
             searchFrame.Visible = not searchFrame.Visible
@@ -1400,16 +1733,32 @@ function MacUI:CreateWindow(options)
     end
 
     -- Opening animation
-    window.Size = UDim2.new(0, 0, 0, 0)
-    window.BackgroundTransparency = 1
-    MacUI.Tween(window, {Time = 0.4, EasingStyle = Enum.EasingStyle.Quint}, {
-        Size = size,
-        BackgroundTransparency = acrylic and MacUI.GlassStyle.Transparency or 0.05
-    })
+    local function OpenWindow()
+        windowContainer.Size = UDim2.new(0, 0, 0, 0)
+        if windowContainer.GlassBase then
+            windowContainer.GlassBase.BackgroundTransparency = 1
+        end
+        MacUI.Tween(windowContainer, {Time = 0.45, EasingStyle = Enum.EasingStyle.Quint}, {
+            Size = size
+        })
+        if windowContainer.GlassBase then
+            MacUI.Tween(windowContainer.GlassBase, {Time = 0.4}, {
+                BackgroundTransparency = acrylic and MacUI.GlassStyle.Transparency or 0.06
+            })
+        end
+    end
+
+    if showBoot then
+        self:PlayBootSequence({
+            Duration = 2.6,
+            OnComplete = OpenWindow
+        })
+    else
+        OpenWindow()
+    end
 
     table.insert(self.Windows, Window)
     return Window
 end
-
 
 return MacUI
