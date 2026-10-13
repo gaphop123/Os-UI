@@ -74,31 +74,92 @@ MainSection:CreateButton({
 | `Acrylic` | boolean | `true` | Background translucency |
 | `Size` | UDim2 | `760x500` | Initial UI bounds |
 
-### Available Controls
+### Available Controls & Callbacks
 
 ```lua
+-- Button
+Section:CreateButton({
+    Name = "Click Me",
+    Description = "Optional subtitle",
+    Callback = function()
+        -- Fires when clicked (no arguments)
+    end
+})
+
 -- Toggle
-local Toggle = Section:CreateToggle({ Name = "Enable", CurrentValue = false, Callback = function(val) end })
+local Toggle = Section:CreateToggle({
+    Name = "Enable",
+    CurrentValue = false,
+    Callback = function(state)
+        -- state: boolean (true / false)
+        print("Toggle state:", state)
+    end
+})
 Toggle:Set(true)
 
 -- Slider
-local Slider = Section:CreateSlider({ Name = "Speed", Range = {0, 100}, Increment = 1, CurrentValue = 16, Callback = function(val) end })
+local Slider = Section:CreateSlider({
+    Name = "Speed",
+    Range = {0, 100},
+    Increment = 1,
+    CurrentValue = 16,
+    Callback = function(val)
+        -- val: number
+        print("Slider value:", val)
+    end
+})
 Slider:Set(50)
 
 -- Dropdown
-Section:CreateDropdown({ Name = "Select Mode", Options = {"Mode A", "Mode B"}, CurrentOption = "Mode A", Callback = function(opt) end })
+Section:CreateDropdown({
+    Name = "Select Mode",
+    Options = {"Mode A", "Mode B"},
+    CurrentOption = "Mode A",
+    Callback = function(opt)
+        -- opt: string (selected option)
+        print("Selected mode:", opt)
+    end
+})
 
 -- Input
-Section:CreateInput({ Name = "Target User", PlaceholderText = "Username...", Callback = function(text) end })
+Section:CreateInput({
+    Name = "Target User",
+    PlaceholderText = "Username...",
+    Callback = function(text)
+        -- text: string (current input text on focus lost)
+        print("Input text:", text)
+    end
+})
 
 -- Keybind
-Section:CreateKeybind({ Name = "Toggle UI Key", CurrentKeybind = Enum.KeyCode.RightShift, Callback = function() Window:Toggle() end })
+Section:CreateKeybind({
+    Name = "Toggle UI Key",
+    CurrentKeybind = Enum.KeyCode.RightShift,
+    Callback = function()
+        -- Fires when the bound key is pressed
+        Window:Toggle()
+    end
+})
 
 -- Color Picker
-Section:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(255, 0, 0), Callback = function(color) end })
+Section:CreateColorPicker({
+    Name = "ESP Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Callback = function(color)
+        -- color: Color3
+        print("Selected color:", color)
+    end
+})
 
 -- Segmented Control
-Section:CreateSegmentedControl({ Options = {"Day", "Night"}, Default = "Day", Callback = function(choice) end })
+Section:CreateSegmentedControl({
+    Options = {"Day", "Night"},
+    Default = "Day",
+    Callback = function(choice)
+        -- choice: string
+        print("Segment choice:", choice)
+    end
+})
 ```
 
 ---
@@ -169,8 +230,8 @@ Tab:CreateButton({
 Tab:CreateKeybind({
     Name = "Hide UI",
     CurrentKeybind = Enum.KeyCode.RightControl,
-    Callback = function(key)
-        -- fires when a new key is bound; use Window:Toggle() for hide
+    Callback = function()
+        -- Fires when the assigned key is pressed
         Window:Toggle()
     end
 })
@@ -200,7 +261,7 @@ local Tab3 = Window:CreateTab("Settings", "settings")
 
 > **Built-in Lucide keys:** `home`, `settings`, `player` / `user`, `visual` / `eye`, `combat` / `sword`, `misc` / `box`, `about` / `info`, `search`, `close` / `x`, `minimize`, `maximize`, `menu`, `cog`, `users`, `swords`, and more.
 
-### Available Controls
+### Available Controls & Callbacks
 
 > **Note:** All controls live on the tab (not on sections). Sections are visual headers only.
 
@@ -221,7 +282,9 @@ Tab:CreateParagraph({
 Tab:CreateButton({
     Name = "Click me",
     Description = "Optional subtitle",   -- makes the button taller
-    Callback = function() end
+    Callback = function()
+        -- Fires when clicked (no arguments)
+    end
 })
 
 -- Toggle  → returns { Set = fn, Get = fn }
@@ -229,7 +292,9 @@ local Toggle = Tab:CreateToggle({
     Name = "Enable",
     CurrentValue = false,
     Flag = "EnableFlag",                 -- persisted if config is on
-    Callback = function(val) end
+    Callback = function(val)
+        -- val: boolean
+    end
 })
 Toggle:Set(true)
 
@@ -240,7 +305,9 @@ local Slider = Tab:CreateSlider({
     Increment = 1,
     CurrentValue = 16,
     Flag = "SpeedFlag",
-    Callback = function(val) end
+    Callback = function(val)
+        -- val: number
+    end
 })
 Slider:Set(50)
 
@@ -250,7 +317,9 @@ Tab:CreateDropdown({
     Options = {"Mode A", "Mode B"},
     CurrentOption = "Mode A",
     Flag = "ModeFlag",
-    Callback = function(opt) end
+    Callback = function(opt)
+        -- opt: string
+    end
 })
 
 -- Input (TextBox)
@@ -258,21 +327,27 @@ Tab:CreateInput({
     Name = "Target User",
     PlaceholderText = "Username...",
     Flag = "UserFlag",
-    Callback = function(text) end
+    Callback = function(text)
+        -- text: string
+    end
 })
 
 -- Keybind  → returns { Get = fn, Set = fn }
 Tab:CreateKeybind({
     Name = "Toggle UI Key",
     CurrentKeybind = Enum.KeyCode.RightShift,
-    Callback = function(key) end          -- called when a new key is chosen
+    Callback = function()
+        -- Fires when the bound key is pressed
+    end
 })
 
 -- Color Picker (cycles preset accents) → returns { Set = fn, Get = fn }
 Tab:CreateColorPicker({
     Name = "ESP Color",
     Color = Color3.fromRGB(0, 120, 215),
-    Callback = function(color) end
+    Callback = function(color)
+        -- color: Color3
+    end
 })
 ```
 
