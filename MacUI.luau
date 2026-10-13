@@ -21,7 +21,7 @@ local MacUI = {
         HighContrast = false
     },
     GlassStyle = {
-        Transparency = 0.22,
+        Transparency = 0.32,
         Border = true,
         Shadow = true,
         Tint = Color3.fromRGB(30, 30, 35),
@@ -118,6 +118,72 @@ function MacUI.PulseScale(object, scale, duration)
     MacUI.Tween(uiScale, {Time = duration * 0.4, EasingStyle = Enum.EasingStyle.Back}, {Scale = scale})
     task.delay(duration * 0.4, function()
         MacUI.Tween(uiScale, {Time = duration * 0.6, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1})
+    end)
+end
+
+-- Press squish (quick down-scale on click, snaps back)
+function MacUI.PressSquish(object, scale, duration)
+    if MacUI.Accessibility.ReducedMotion then return end
+    scale = scale or 0.9
+    duration = duration or 0.18
+    local uiScale = object:FindFirstChildOfClass("UIScale")
+    if not uiScale then
+        uiScale = Instance.new("UIScale")
+        uiScale.Parent = object
+    end
+    MacUI.Tween(uiScale, {Time = duration * 0.35, EasingStyle = Enum.EasingStyle.Quad}, {Scale = scale})
+    task.delay(duration * 0.35, function()
+        MacUI.Tween(uiScale, {Time = duration * 0.65, EasingStyle = Enum.EasingStyle.Elastic}, {Scale = 1})
+    end)
+end
+
+-- Horizontal shake (error / invalid input feedback)
+function MacUI.Shake(object, distance, duration)
+    if MacUI.Accessibility.ReducedMotion then return end
+    distance = distance or 6
+    duration = duration or 0.35
+    local original = object.Position
+    local step = duration / 4
+    local t1 = MacUI.Tween(object, {Time = step, EasingStyle = Enum.EasingStyle.Sine}, {
+        Position = original + UDim2.new(0, distance, 0, 0)
+    })
+    if not t1 then return end
+    t1.Completed:Connect(function()
+        local t2 = MacUI.Tween(object, {Time = step, EasingStyle = Enum.EasingStyle.Sine}, {
+            Position = original - UDim2.new(0, distance, 0, 0)
+        })
+        if t2 then
+            t2.Completed:Connect(function()
+                local t3 = MacUI.Tween(object, {Time = step, EasingStyle = Enum.EasingStyle.Sine}, {
+                    Position = original + UDim2.new(0, distance * 0.4, 0, 0)
+                })
+                if t3 then
+                    t3.Completed:Connect(function()
+                        MacUI.Tween(object, {Time = step, EasingStyle = Enum.EasingStyle.Sine}, {
+                            Position = original
+                        })
+                    end)
+                end
+            end)
+        end
+    end)
+end
+
+-- Fade + rise entrance, used for staggered dock icons / list items
+function MacUI.PopIn(object, delayTime)
+    if MacUI.Accessibility.ReducedMotion then return end
+    local uiScale = object:FindFirstChildOfClass("UIScale")
+    if not uiScale then
+        uiScale = Instance.new("UIScale")
+        uiScale.Parent = object
+    end
+    uiScale.Scale = 0.4
+    task.delay(delayTime or 0, function()
+        if object and object.Parent then
+            MacUI.Tween(uiScale, {Time = 0.35, EasingStyle = Enum.EasingStyle.Back, EasingDirection = Enum.EasingDirection.Out}, {
+                Scale = 1
+            })
+        end
     end)
 end
 
@@ -225,38 +291,58 @@ function MacUI.AddIcon(name, assetIdOrData)
     end
 end
 
--- Theme system
-MacUI.Themes.Dark = {
-    Background = Color3.fromRGB(28, 28, 30),
-    SecondaryBackground = Color3.fromRGB(38, 38, 42),
-    TertiaryBackground = Color3.fromRGB(48, 48, 52),
+-- Theme system — Liquid Glass first (matches macOS Sequoia style)
+-- IconColor: tint for Lucide icons | TabInactive: dock/tab idle icon color
+
+MacUI.Themes["Liquid Glass Dark"] = {
+    Background = Color3.fromRGB(22, 22, 26),
+    SecondaryBackground = Color3.fromRGB(32, 32, 38),
+    TertiaryBackground = Color3.fromRGB(44, 44, 52),
     Text = Color3.fromRGB(255, 255, 255),
-    SecondaryText = Color3.fromRGB(180, 180, 185),
+    SecondaryText = Color3.fromRGB(170, 170, 180),
     Accent = Color3.fromRGB(10, 132, 255),
-    Border = Color3.fromRGB(70, 70, 75),
-    Glass = Color3.fromRGB(40, 40, 45),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.78,
+    Glass = Color3.fromRGB(28, 28, 34),
+    GlassTransparency = 0.32,
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(35, 35, 40)
+    Dock = Color3.fromRGB(30, 30, 36),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(240, 240, 245),
+    TabInactive = Color3.fromRGB(160, 160, 170),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(18, 18, 22)
 }
 
-MacUI.Themes.Light = {
-    Background = Color3.fromRGB(246, 246, 248),
+MacUI.Themes["Liquid Glass Light"] = {
+    Background = Color3.fromRGB(245, 245, 250),
     SecondaryBackground = Color3.fromRGB(255, 255, 255),
-    TertiaryBackground = Color3.fromRGB(235, 235, 240),
-    Text = Color3.fromRGB(28, 28, 30),
-    SecondaryText = Color3.fromRGB(90, 90, 95),
+    TertiaryBackground = Color3.fromRGB(230, 230, 238),
+    Text = Color3.fromRGB(20, 20, 28),
+    SecondaryText = Color3.fromRGB(90, 90, 100),
     Accent = Color3.fromRGB(0, 122, 255),
-    Border = Color3.fromRGB(200, 200, 205),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.35,
     Glass = Color3.fromRGB(255, 255, 255),
+    GlassTransparency = 0.38,
     Success = Color3.fromRGB(52, 199, 89),
     Warning = Color3.fromRGB(255, 149, 0),
     Danger = Color3.fromRGB(255, 59, 48),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(245, 245, 247)
+    Dock = Color3.fromRGB(250, 250, 255),
+    DockTransparency = 0.35,
+    IconColor = Color3.fromRGB(40, 40, 50),
+    TabInactive = Color3.fromRGB(110, 110, 125),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(240, 240, 248)
 }
+
+-- Aliases + legacy themes
+MacUI.Themes.Dark = MacUI.Themes["Liquid Glass Dark"]
+MacUI.Themes.Light = MacUI.Themes["Liquid Glass Light"]
 
 MacUI.Themes.Graphite = {
     Background = Color3.fromRGB(40, 40, 42),
@@ -265,62 +351,207 @@ MacUI.Themes.Graphite = {
     Text = Color3.fromRGB(245, 245, 247),
     SecondaryText = Color3.fromRGB(160, 160, 165),
     Accent = Color3.fromRGB(120, 120, 130),
-    Border = Color3.fromRGB(80, 80, 85),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.75,
     Glass = Color3.fromRGB(55, 55, 58),
+    GlassTransparency = 0.28,
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(45, 45, 48)
+    Dock = Color3.fromRGB(45, 45, 48),
+    DockTransparency = 0.25,
+    IconColor = Color3.fromRGB(235, 235, 240),
+    TabInactive = Color3.fromRGB(150, 150, 155),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(38, 38, 40)
 }
 
 MacUI.Themes.Midnight = {
-    Background = Color3.fromRGB(15, 15, 20),
-    SecondaryBackground = Color3.fromRGB(22, 22, 28),
-    TertiaryBackground = Color3.fromRGB(30, 30, 38),
-    Text = Color3.fromRGB(240, 240, 245),
-    SecondaryText = Color3.fromRGB(150, 150, 160),
+    Background = Color3.fromRGB(12, 12, 18),
+    SecondaryBackground = Color3.fromRGB(20, 20, 28),
+    TertiaryBackground = Color3.fromRGB(30, 30, 40),
+    Text = Color3.fromRGB(240, 240, 250),
+    SecondaryText = Color3.fromRGB(150, 150, 165),
     Accent = Color3.fromRGB(94, 92, 230),
-    Border = Color3.fromRGB(50, 50, 60),
-    Glass = Color3.fromRGB(25, 25, 32),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.82,
+    Glass = Color3.fromRGB(20, 20, 28),
+    GlassTransparency = 0.35,
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(18, 18, 24)
+    Dock = Color3.fromRGB(16, 16, 24),
+    DockTransparency = 0.3,
+    IconColor = Color3.fromRGB(230, 230, 245),
+    TabInactive = Color3.fromRGB(140, 140, 160),
+    Sheen = Color3.fromRGB(200, 200, 255),
+    Widget = Color3.fromRGB(14, 14, 20)
 }
 
 MacUI.Themes.Blue = {
-    Background = Color3.fromRGB(20, 30, 50),
-    SecondaryBackground = Color3.fromRGB(28, 40, 65),
-    TertiaryBackground = Color3.fromRGB(35, 50, 80),
+    Background = Color3.fromRGB(18, 28, 48),
+    SecondaryBackground = Color3.fromRGB(26, 38, 62),
+    TertiaryBackground = Color3.fromRGB(34, 48, 78),
     Text = Color3.fromRGB(240, 245, 255),
     SecondaryText = Color3.fromRGB(160, 180, 210),
     Accent = Color3.fromRGB(10, 132, 255),
-    Border = Color3.fromRGB(50, 70, 100),
-    Glass = Color3.fromRGB(30, 45, 70),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.8,
+    Glass = Color3.fromRGB(28, 42, 68),
+    GlassTransparency = 0.32,
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(22, 35, 55)
+    Dock = Color3.fromRGB(22, 34, 55),
+    DockTransparency = 0.3,
+    IconColor = Color3.fromRGB(230, 240, 255),
+    TabInactive = Color3.fromRGB(140, 160, 190),
+    Sheen = Color3.fromRGB(180, 210, 255),
+    Widget = Color3.fromRGB(16, 26, 45)
 }
 
 MacUI.Themes.Purple = {
-    Background = Color3.fromRGB(30, 20, 45),
-    SecondaryBackground = Color3.fromRGB(40, 28, 58),
-    TertiaryBackground = Color3.fromRGB(50, 35, 70),
+    Background = Color3.fromRGB(28, 18, 42),
+    SecondaryBackground = Color3.fromRGB(38, 26, 55),
+    TertiaryBackground = Color3.fromRGB(48, 34, 68),
     Text = Color3.fromRGB(245, 240, 255),
     SecondaryText = Color3.fromRGB(180, 160, 200),
     Accent = Color3.fromRGB(175, 82, 222),
-    Border = Color3.fromRGB(70, 50, 90),
-    Glass = Color3.fromRGB(45, 30, 65),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.78,
+    Glass = Color3.fromRGB(42, 28, 60),
+    GlassTransparency = 0.32,
     Success = Color3.fromRGB(48, 209, 88),
     Warning = Color3.fromRGB(255, 159, 10),
     Danger = Color3.fromRGB(255, 69, 58),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(35, 25, 50)
+    Dock = Color3.fromRGB(34, 24, 50),
+    DockTransparency = 0.3,
+    IconColor = Color3.fromRGB(240, 230, 255),
+    TabInactive = Color3.fromRGB(160, 140, 180),
+    Sheen = Color3.fromRGB(220, 180, 255),
+    Widget = Color3.fromRGB(24, 16, 38)
 }
+
+MacUI.Themes.Nord = {
+    Background = Color3.fromRGB(32, 36, 48),
+    SecondaryBackground = Color3.fromRGB(40, 46, 60),
+    TertiaryBackground = Color3.fromRGB(52, 59, 75),
+    Text = Color3.fromRGB(236, 239, 244),
+    SecondaryText = Color3.fromRGB(165, 173, 190),
+    Accent = Color3.fromRGB(136, 192, 208),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.8,
+    Glass = Color3.fromRGB(46, 52, 68),
+    GlassTransparency = 0.3,
+    Success = Color3.fromRGB(163, 190, 140),
+    Warning = Color3.fromRGB(235, 203, 139),
+    Danger = Color3.fromRGB(191, 97, 106),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(36, 41, 54),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(229, 233, 240),
+    TabInactive = Color3.fromRGB(150, 160, 178),
+    Sheen = Color3.fromRGB(216, 222, 233),
+    Widget = Color3.fromRGB(28, 32, 42)
+}
+
+MacUI.Themes.Solarized = {
+    Background = Color3.fromRGB(0, 43, 54),
+    SecondaryBackground = Color3.fromRGB(7, 54, 66),
+    TertiaryBackground = Color3.fromRGB(16, 65, 79),
+    Text = Color3.fromRGB(238, 232, 213),
+    SecondaryText = Color3.fromRGB(131, 148, 150),
+    Accent = Color3.fromRGB(38, 139, 210),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.82,
+    Glass = Color3.fromRGB(7, 54, 66),
+    GlassTransparency = 0.32,
+    Success = Color3.fromRGB(133, 153, 0),
+    Warning = Color3.fromRGB(181, 137, 0),
+    Danger = Color3.fromRGB(220, 50, 47),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(4, 48, 59),
+    DockTransparency = 0.26,
+    IconColor = Color3.fromRGB(238, 232, 213),
+    TabInactive = Color3.fromRGB(110, 136, 138),
+    Sheen = Color3.fromRGB(147, 161, 161),
+    Widget = Color3.fromRGB(0, 36, 45)
+}
+
+MacUI.Themes["Rose Pine"] = {
+    Background = Color3.fromRGB(25, 23, 36),
+    SecondaryBackground = Color3.fromRGB(33, 32, 46),
+    TertiaryBackground = Color3.fromRGB(42, 40, 58),
+    Text = Color3.fromRGB(224, 222, 244),
+    SecondaryText = Color3.fromRGB(144, 140, 170),
+    Accent = Color3.fromRGB(235, 188, 186),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.8,
+    Glass = Color3.fromRGB(38, 35, 52),
+    GlassTransparency = 0.32,
+    Success = Color3.fromRGB(49, 116, 143),
+    Warning = Color3.fromRGB(246, 193, 119),
+    Danger = Color3.fromRGB(235, 111, 146),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(31, 29, 46),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(228, 227, 244),
+    TabInactive = Color3.fromRGB(144, 140, 170),
+    Sheen = Color3.fromRGB(246, 193, 119),
+    Widget = Color3.fromRGB(21, 19, 31)
+}
+
+MacUI.Themes.Forest = {
+    Background = Color3.fromRGB(20, 30, 24),
+    SecondaryBackground = Color3.fromRGB(27, 40, 32),
+    TertiaryBackground = Color3.fromRGB(36, 52, 42),
+    Text = Color3.fromRGB(232, 240, 232),
+    SecondaryText = Color3.fromRGB(165, 185, 168),
+    Accent = Color3.fromRGB(96, 189, 115),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.8,
+    Glass = Color3.fromRGB(30, 44, 35),
+    GlassTransparency = 0.32,
+    Success = Color3.fromRGB(96, 189, 115),
+    Warning = Color3.fromRGB(222, 180, 90),
+    Danger = Color3.fromRGB(206, 92, 80),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(23, 34, 27),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(226, 236, 226),
+    TabInactive = Color3.fromRGB(150, 170, 154),
+    Sheen = Color3.fromRGB(200, 230, 205),
+    Widget = Color3.fromRGB(16, 24, 19)
+}
+
+MacUI.Themes["Classic Aqua"] = {
+    Background = Color3.fromRGB(236, 242, 250),
+    SecondaryBackground = Color3.fromRGB(246, 250, 255),
+    TertiaryBackground = Color3.fromRGB(222, 233, 246),
+    Text = Color3.fromRGB(20, 30, 45),
+    SecondaryText = Color3.fromRGB(90, 105, 125),
+    Accent = Color3.fromRGB(0, 140, 230),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.3,
+    Glass = Color3.fromRGB(255, 255, 255),
+    GlassTransparency = 0.35,
+    Success = Color3.fromRGB(52, 199, 89),
+    Warning = Color3.fromRGB(255, 149, 0),
+    Danger = Color3.fromRGB(255, 59, 48),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(250, 253, 255),
+    DockTransparency = 0.32,
+    IconColor = Color3.fromRGB(30, 45, 65),
+    TabInactive = Color3.fromRGB(120, 140, 165),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(230, 240, 250)
+}
+
+MacUI.CurrentTheme = "Liquid Glass Dark"
 
 function MacUI:RegisterTheme(name, themeTable)
     self.Themes[name] = themeTable
@@ -357,10 +588,12 @@ end
 -- ============================================================
 local function CreateGlassFrame(parent, props)
     props = props or {}
-    local theme = MacUI.Themes[MacUI.CurrentTheme]
-    local radius = props.Radius or 14
-    local transparency = props.Transparency or MacUI.GlassStyle.Transparency
-    local color = props.Color or theme.Glass
+    local theme = MacUI.Themes[MacUI.CurrentTheme] or MacUI.Themes["Liquid Glass Dark"]
+    local radius = props.Radius or 16
+    local transparency = props.Transparency
+        or theme.GlassTransparency
+        or MacUI.GlassStyle.Transparency
+    local color = props.Color or theme.Glass or theme.Background
 
     local container = Instance.new("Frame")
     container.BackgroundTransparency = 1
@@ -416,9 +649,9 @@ local function CreateGlassFrame(parent, props)
         -- Subtle top highlight (liquid glass sheen)
         local sheen = Instance.new("Frame")
         sheen.Name = "Sheen"
-        sheen.Size = UDim2.new(1, 0, 0.38, 0)
-        sheen.BackgroundColor3 = Color3.new(1, 1, 1)
-        sheen.BackgroundTransparency = 0.92
+        sheen.Size = UDim2.new(1, 0, 0.42, 0)
+        sheen.BackgroundColor3 = theme.Sheen or Color3.new(1, 1, 1)
+        sheen.BackgroundTransparency = 0.88
         sheen.BorderSizePixel = 0
         sheen.ZIndex = 3
         sheen.Parent = base
@@ -437,13 +670,13 @@ local function CreateGlassFrame(parent, props)
         sheenGradient.Parent = sheen
     end
 
-    -- Border stroke
+    -- Border stroke (soft white edge like macOS liquid glass)
     if MacUI.GlassStyle.Border then
         local stroke = Instance.new("UIStroke")
         stroke.Name = "GlassStroke"
-        stroke.Color = theme.Border
-        stroke.Transparency = 0.45
-        stroke.Thickness = 1.2
+        stroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
+        stroke.Transparency = theme.BorderTransparency or 0.7
+        stroke.Thickness = 1
         stroke.Parent = base
     end
 
@@ -691,7 +924,7 @@ function MacUI:CreateWindow(options)
     options = options or {}
     local name = options.Name or "MacUI"
     local subtitle = options.Subtitle or ""
-    local themeName = options.Theme or "Dark"
+    local themeName = options.Theme or "Liquid Glass Dark"
     local acrylic = options.Acrylic ~= false
     local size = options.Size or UDim2.new(0, 760, 0, 500)
     local minSize = options.MinSize or Vector2.new(480, 320)
@@ -711,8 +944,8 @@ function MacUI:CreateWindow(options)
 
     -- Main window container (liquid glass)
     local windowContainer = CreateGlassFrame(screenGui, {
-        Radius = 18,
-        Transparency = acrylic and MacUI.GlassStyle.Transparency or 0.06,
+        Radius = 20,
+        Transparency = acrylic and (theme.GlassTransparency or MacUI.GlassStyle.Transparency) or 0.08,
         Color = theme.Background
     })
     windowContainer.Name = "Window"
@@ -782,7 +1015,7 @@ function MacUI:CreateWindow(options)
     searchBtn.Position = UDim2.new(1, -36, 0.5, -10)
     searchBtn.BackgroundTransparency = 1
     MacUI.ApplyIcon(searchBtn, "search")
-    searchBtn.ImageColor3 = theme.SecondaryText
+    searchBtn.ImageColor3 = theme.IconColor or theme.SecondaryText
     searchBtn.ZIndex = 11
     searchBtn.Parent = titleBar
 
@@ -823,37 +1056,56 @@ function MacUI:CreateWindow(options)
     -- ============================================================
     -- DOCK (bottom, Lucide icons, jump animation)
     -- ============================================================
-    local dockContainer, dockFrame, dockLayout
+    -- DOCK_ITEM_SIZE / DOCK_ITEM_GAP / DOCK_PAD_X must match the values used below
+    local DOCK_ITEM_SIZE = 44
+    local DOCK_ITEM_GAP = 6
+    local DOCK_PAD_X = 12
+
+    local dockContainer, dockFrame, dockItems, dockLayout
     if useDock then
         dockContainer = CreateGlassFrame(window, {
-            Radius = 16,
-            Transparency = 0.18,
+            Radius = 18,
+            Transparency = theme.DockTransparency or theme.GlassTransparency or 0.28,
             Color = theme.Dock or theme.SecondaryBackground
         })
         dockContainer.Name = "Dock"
-        dockContainer.Size = UDim2.new(0, 0, 0, 58)
-        dockContainer.Position = UDim2.new(0.5, 0, 1, -12)
+        -- Fixed, manually-computed size (see Window:_UpdateDockWidth). AutomaticSize chained
+        -- through the glass frame's own Scale-sized children caused the dock to size itself
+        -- against its own content, which is unreliable - manual width is predictable.
+        dockContainer.Size = UDim2.new(0, DOCK_PAD_X * 2, 0, 62)
+        dockContainer.Position = UDim2.new(0.5, 0, 1, -14)
         dockContainer.AnchorPoint = Vector2.new(0.5, 1)
         dockContainer.ZIndex = 20
-        dockContainer.AutomaticSize = Enum.AutomaticSize.X
 
         dockFrame = GetGlassBase(dockContainer)
-        dockFrame.AutomaticSize = Enum.AutomaticSize.X
+
+        -- Dedicated sub-frame to hold the dock buttons + their UIListLayout. This is
+        -- IMPORTANT: dockFrame ("GlassBase") also parents the Frost and Sheen decorative
+        -- overlay frames created by CreateGlassFrame. A UIListLayout arranges every GuiObject
+        -- child of its parent, so if the layout were placed directly on dockFrame it would
+        -- also try to lay out Frost/Sheen as if they were dock icons, corrupting the dock's
+        -- spacing. Keeping the layout on its own frame avoids that entirely.
+        dockItems = Instance.new("Frame")
+        dockItems.Name = "DockItems"
+        dockItems.Size = UDim2.new(1, 0, 1, 0)
+        dockItems.BackgroundTransparency = 1
+        dockItems.ZIndex = 20
+        dockItems.Parent = dockFrame
 
         local dockPad = Instance.new("UIPadding")
-        dockPad.PaddingLeft = UDim.new(0, 12)
-        dockPad.PaddingRight = UDim.new(0, 12)
+        dockPad.PaddingLeft = UDim.new(0, DOCK_PAD_X)
+        dockPad.PaddingRight = UDim.new(0, DOCK_PAD_X)
         dockPad.PaddingTop = UDim.new(0, 8)
         dockPad.PaddingBottom = UDim.new(0, 8)
-        dockPad.Parent = dockFrame
+        dockPad.Parent = dockItems
 
         dockLayout = Instance.new("UIListLayout")
         dockLayout.FillDirection = Enum.FillDirection.Horizontal
         dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
         dockLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-        dockLayout.Padding = UDim.new(0, 6)
+        dockLayout.Padding = UDim.new(0, DOCK_ITEM_GAP)
         dockLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        dockLayout.Parent = dockFrame
+        dockLayout.Parent = dockItems
     end
 
     -- Window object
@@ -930,14 +1182,59 @@ function MacUI:CreateWindow(options)
         local winBase = GetGlassBase(windowContainer)
         if winBase then
             winBase.BackgroundColor3 = t.Background
+            winBase.BackgroundTransparency = t.GlassTransparency or MacUI.GlassStyle.Transparency
+            local stroke = winBase:FindFirstChild("GlassStroke")
+            if stroke then
+                stroke.Color = t.Border or Color3.fromRGB(255, 255, 255)
+                stroke.Transparency = t.BorderTransparency or 0.7
+            end
+            local frost = winBase:FindFirstChild("Frost")
+            if frost then
+                frost.BackgroundColor3 = t.Glass or t.Background
+            end
+            local sheen = winBase:FindFirstChild("Sheen")
+            if sheen then
+                sheen.BackgroundColor3 = t.Sheen or Color3.fromRGB(255, 255, 255)
+            end
         end
         titleLabel.TextColor3 = t.Text
-        searchBtn.ImageColor3 = t.SecondaryText
+        searchBtn.ImageColor3 = t.IconColor or t.SecondaryText
+
+        -- Dock glass + icons
         if dockContainer then
             local dockBase = GetGlassBase(dockContainer)
             if dockBase then
                 dockBase.BackgroundColor3 = t.Dock or t.SecondaryBackground
+                dockBase.BackgroundTransparency = t.DockTransparency or t.GlassTransparency or 0.3
+                local stroke = dockBase:FindFirstChild("GlassStroke")
+                if stroke then
+                    stroke.Color = t.Border or Color3.fromRGB(255, 255, 255)
+                    stroke.Transparency = t.BorderTransparency or 0.7
+                end
             end
+        end
+
+        -- Tab / dock icon colors follow theme
+        for _, tab in pairs(self.Tabs) do
+            if tab.DockButton then
+                local icon = tab.DockButton:FindFirstChild("Icon")
+                local indicator = tab.DockButton:FindFirstChild("Indicator")
+                if icon then
+                    if self.CurrentTab == tab then
+                        icon.ImageColor3 = t.Accent
+                    else
+                        icon.ImageColor3 = t.TabInactive or t.SecondaryText
+                    end
+                end
+                if indicator then
+                    indicator.BackgroundColor3 = t.Accent
+                end
+            end
+        end
+
+        -- Scrollbar
+        if contentScroll then
+            contentScroll.ScrollBarImageColor3 = t.Border
         end
     end
 
@@ -1016,6 +1313,17 @@ function MacUI:CreateWindow(options)
         end
     end
 
+    -- Recompute + smoothly animate the dock's width to fit its current icon count
+    function Window:_UpdateDockWidth()
+        if not dockContainer then return end
+        local count = #self.TabOrder
+        if count < 1 then count = 1 end
+        local width = (DOCK_PAD_X * 2) + (DOCK_ITEM_SIZE * count) + (DOCK_ITEM_GAP * math.max(count - 1, 0))
+        MacUI.Tween(dockContainer, {Time = 0.3, EasingStyle = Enum.EasingStyle.Quint}, {
+            Size = UDim2.new(0, width, 0, 62)
+        })
+    end
+
     -- ============================================================
     -- TABS (with Dock integration)
     -- ============================================================
@@ -1050,10 +1358,12 @@ function MacUI:CreateWindow(options)
             for _, t in pairs(Window.Tabs) do
                 t.Content.Visible = false
                 if t.DockButton then
-                    local icon = t.DockButton:FindFirstChild("Icon")
+                    local icon = t.DockIcon or t.DockButton:FindFirstChild("Icon")
                     local indicator = t.DockButton:FindFirstChild("Indicator")
                     if icon then
-                        MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.SecondaryText})
+                        MacUI.Tween(icon, {Time = 0.2}, {
+                            ImageColor3 = theme.TabInactive or theme.SecondaryText
+                        })
                     end
                     if indicator then
                         MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 1})
@@ -1063,30 +1373,51 @@ function MacUI:CreateWindow(options)
             tabContent.Visible = true
             Window.CurrentTab = Tab
 
+            -- Content switch animation: fade/slide the newly shown tab in
+            if not MacUI.Accessibility.ReducedMotion then
+                local contentScale = tabContent:FindFirstChildOfClass("UIScale")
+                if not contentScale then
+                    contentScale = Instance.new("UIScale")
+                    contentScale.Parent = tabContent
+                end
+                contentScale.Scale = 0.98
+                local original = tabContent.Position
+                tabContent.Position = original + UDim2.new(0, 0, 0, 10)
+                MacUI.Tween(contentScale, {Time = 0.26, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1})
+                MacUI.Tween(tabContent, {Time = 0.26, EasingStyle = Enum.EasingStyle.Quint}, {Position = original})
+            end
+
             if Tab.DockButton then
-                local icon = Tab.DockButton:FindFirstChild("Icon")
+                -- Animate the Icon (a plain child of the dock button) rather than the
+                -- DockButton itself. DockButton's Position is owned by the dock's
+                -- UIListLayout; tweening it directly produced no visible motion, which is
+                -- why the dock icons never appeared to "jump". The icon is a free child of
+                -- the button and isn't managed by any layout, so it animates cleanly.
+                local icon = Tab.DockIcon or Tab.DockButton:FindFirstChild("Icon")
                 local indicator = Tab.DockButton:FindFirstChild("Indicator")
                 if icon then
                     MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.Accent})
+                    MacUI.Bounce(icon, 14, 0.42)
                 end
                 if indicator then
                     MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 0})
                 end
-                -- Jump animation
-                MacUI.Bounce(Tab.DockButton, 16, 0.4)
             end
         end
 
+        Window.Tabs[tabName] = Tab
+        table.insert(Window.TabOrder, Tab)
+
         -- Dock button
-        if useDock and dockFrame then
+        if useDock and dockItems then
             local dockBtn = Instance.new("TextButton")
             dockBtn.Name = tabName
-            dockBtn.Size = UDim2.new(0, 44, 0, 44)
+            dockBtn.Size = UDim2.new(0, DOCK_ITEM_SIZE, 0, DOCK_ITEM_SIZE)
             dockBtn.BackgroundTransparency = 1
             dockBtn.Text = ""
             dockBtn.AutoButtonColor = false
             dockBtn.ZIndex = 21
-            dockBtn.Parent = dockFrame
+            dockBtn.Parent = dockItems
 
             local icon = Instance.new("ImageLabel")
             icon.Name = "Icon"
@@ -1094,7 +1425,7 @@ function MacUI:CreateWindow(options)
             icon.Position = UDim2.new(0.5, -13, 0.5, -15)
             icon.BackgroundTransparency = 1
             MacUI.ApplyIcon(icon, iconName)
-            icon.ImageColor3 = theme.SecondaryText
+            icon.ImageColor3 = theme.TabInactive or theme.SecondaryText
             icon.ZIndex = 22
             icon.Parent = dockBtn
 
@@ -1128,9 +1459,16 @@ function MacUI:CreateWindow(options)
                     })
                 end
             end))
-            TrackConnection(dockBtn.MouseButton1Click:Connect(SelectTab))
+            TrackConnection(dockBtn.MouseButton1Click:Connect(function()
+                MacUI.PressSquish(icon, 0.82, 0.2)
+                SelectTab()
+            end))
 
             Tab.DockButton = dockBtn
+            Tab.DockIcon = icon
+
+            MacUI.PopIn(icon, (#Window.TabOrder - 1) * 0.04)
+            Window:_UpdateDockWidth()
         end
 
         function Tab:CreateSection(sectionName)
@@ -1737,8 +2075,6 @@ function MacUI:CreateWindow(options)
             return Section
         end
 
-        Window.Tabs[tabName] = Tab
-        table.insert(Window.TabOrder, Tab)
         if not Window.CurrentTab then
             SelectTab()
         end
@@ -1793,7 +2129,7 @@ function MacUI:CreateWindow(options)
         })
         if winBase then
             MacUI.Tween(winBase, {Time = 0.4}, {
-                BackgroundTransparency = acrylic and MacUI.GlassStyle.Transparency or 0.06
+                BackgroundTransparency = acrylic and (theme.GlassTransparency or MacUI.GlassStyle.Transparency) or 0.08
             })
         end
     end
