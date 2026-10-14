@@ -1,11 +1,11 @@
 --[[
-    MacUI v2.1.0
+    MacUI v2.0.0
     A modern macOS-inspired Roblox UI library
-    3-Layer Liquid Glass + Metaball Dock Indicators + Fixed Dropdown + Lucide Icons + Rich Animations
+    Liquid Glass + Dock + Boot Sequence + Lucide Icons + Rich Animations
 ]]
 
 local MacUI = {
-    Version = "2.1.0",
+    Version = "2.0.0",
     Themes = {},
     CurrentTheme = "Dark",
     Windows = {},
@@ -186,6 +186,82 @@ function MacUI.PopIn(object, delayTime)
             })
         end
     end)
+end
+
+-- ============================================================
+-- METABALL-STYLE LIQUID BLOBS
+-- Roblox's UI renderer has no blend-mode or shader support, so there's no way to do true
+-- isosurface metaball merging (where two blobs actually fuse into one shape as they touch).
+-- This fakes the *look* of it instead: a few soft, layered-circle glows drift slowly around
+-- behind a glass panel's tint and brighten where they overlap, giving a lava-lamp-ish liquid
+-- motion. Opt-in (pass Metaballs = true to CreateGlassFrame, or call this directly) since
+-- it's extra always-running tweens per blob.
+-- ============================================================
+function MacUI.AddMetaballs(parent, opts)
+    opts = opts or {}
+    if MacUI.Accessibility.ReducedMotion then return {} end
+    local count = opts.Count or 3
+    local theme = MacUI.Themes[MacUI.CurrentTheme] or MacUI.Themes["Liquid Glass Dark"]
+    local color = opts.Color or theme.Accent or Color3.fromRGB(10, 132, 255)
+    local sizeRange = opts.Size or {40, 80}
+
+    local holder = Instance.new("Frame")
+    holder.Name = "Metaballs"
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1, 0, 1, 0)
+    holder.ClipsDescendants = true
+    holder.ZIndex = opts.ZIndex or 1
+    holder.Parent = parent
+
+    local blobs = {}
+    for i = 1, count do
+        local size = sizeRange[1] + math.random() * (sizeRange[2] - sizeRange[1])
+        local blob = Instance.new("Frame")
+        blob.Name = "Blob"
+        blob.Size = UDim2.new(0, size, 0, size)
+        blob.AnchorPoint = Vector2.new(0.5, 0.5)
+        blob.Position = UDim2.new(math.random(), 0, math.random(), 0)
+        blob.BackgroundTransparency = 1
+        blob.ZIndex = holder.ZIndex
+        blob.Parent = holder
+
+        -- Three concentric, decreasingly-transparent circles fake a soft blurred glow
+        -- (Roblox has no real blur filter to apply to a UI element).
+        for ring = 1, 3 do
+            local r = Instance.new("Frame")
+            r.Size = UDim2.new(1 - (ring - 1) * 0.28, 0, 1 - (ring - 1) * 0.28, 0)
+            r.AnchorPoint = Vector2.new(0.5, 0.5)
+            r.Position = UDim2.new(0.5, 0, 0.5, 0)
+            r.BackgroundColor3 = color
+            r.BackgroundTransparency = 0.94 - (ring * 0.03)
+            r.BorderSizePixel = 0
+            r.ZIndex = blob.ZIndex
+            r.Parent = blob
+            local rc = Instance.new("UICorner")
+            rc.CornerRadius = UDim.new(1, 0)
+            rc.Parent = r
+        end
+
+        table.insert(blobs, blob)
+
+        local function Drift()
+            if not (blob and blob.Parent) then return end
+            local targetPos = UDim2.new(math.random(), 0, math.random(), 0)
+            local t = MacUI.Tween(blob, {
+                Time = (opts.Speed or 6) + math.random() * 3,
+                EasingStyle = Enum.EasingStyle.Sine,
+                EasingDirection = Enum.EasingDirection.InOut
+            }, {Position = targetPos})
+            if t then
+                t.Completed:Connect(Drift)
+            else
+                Drift()
+            end
+        end
+        task.delay(i * 0.4, Drift)
+    end
+
+    return blobs
 end
 
 -- ============================================================
@@ -587,12 +663,6 @@ end
 -- ============================================================
 -- LIQUID GLASS FRAME (multi-layer approximation)
 -- ============================================================
--- ============================================================
--- 3-LAYER LIQUID GLASS FRAME
--- Layer 1 (Base)     : tinted translucent fill
--- Layer 2 (Frost)    : diffusion / depth overlay
--- Layer 3 (Specular) : top sheen + soft edge highlight + optional metaball soft glow
--- ============================================================
 local function CreateGlassFrame(parent, props)
     props = props or {}
     local theme = MacUI.Themes[MacUI.CurrentTheme] or MacUI.Themes["Liquid Glass Dark"]
@@ -601,9 +671,6 @@ local function CreateGlassFrame(parent, props)
         or theme.GlassTransparency
         or MacUI.GlassStyle.Transparency
     local color = props.Color or theme.Glass or theme.Background
-    local useLayers = props.Layers
-    if useLayers == nil then useLayers = MacUI.GlassStyle.Layers end
-    local useMetaball = props.Metaball == true -- soft organic edge glow (approximate)
 
     local container = Instance.new("Frame")
     container.BackgroundTransparency = 1
@@ -611,23 +678,26 @@ local function CreateGlassFrame(parent, props)
     container.ClipsDescendants = false
     container.Parent = parent
 
-    -- Soft drop shadow
+    -- Shadow layer
     if MacUI.GlassStyle.Shadow then
         local shadow = Instance.new("ImageLabel")
         shadow.Name = "GlassShadow"
         shadow.BackgroundTransparency = 1
         shadow.Image = MacUI.GlassStyle.ShadowImage or "rbxassetid://6014261993"
         shadow.ImageColor3 = Color3.new(0, 0, 0)
-        shadow.ImageTransparency = 0.52
+        shadow.ImageTransparency = 0.55
         shadow.ScaleType = Enum.ScaleType.Slice
         shadow.SliceCenter = Rect.new(49, 49, 450, 450)
-        shadow.Size = UDim2.new(1, 52, 1, 52)
-        shadow.Position = UDim2.new(0, -26, 0, -22)
+        shadow.Size = UDim2.new(1, 48, 1, 48)
+        shadow.Position = UDim2.new(0, -24, 0, -20)
         shadow.ZIndex = -2
         shadow.Parent = container
     end
 
-    -- ========== LAYER 1: Base glass fill ==========
+    -- Base glass (Layer 1: tint). ClipsDescendants defaults on so nothing - a child frame,
+    -- a hover-grown element, an overlong gradient - can poke a square edge out past the
+    -- rounded corner; pass props.Clip = false to opt a specific frame out (the dock does,
+    -- since its hover-magnified icons are meant to bulge slightly past the dock's edge).
     local base = Instance.new("Frame")
     base.Name = "GlassBase"
     base.Size = UDim2.new(1, 0, 1, 0)
@@ -635,20 +705,33 @@ local function CreateGlassFrame(parent, props)
     base.BackgroundTransparency = transparency
     base.BorderSizePixel = 0
     base.ZIndex = 1
+    base.ClipsDescendants = props.Clip ~= false
     base.Parent = container
 
-    local baseCorner = Instance.new("UICorner")
-    baseCorner.Name = "GlassCorner"
-    baseCorner.CornerRadius = UDim.new(0, radius)
-    baseCorner.Parent = base
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius)
+    corner.Parent = base
 
+    -- ============================================================
+    -- 3-LAYER LIQUID GLASS
+    --   Layer 1: Base        - the tinted translucent fill set above
+    --   Layer 2: Frost/Depth - a diagonal refraction wash that gives the glass body
+    --   Layer 3: Sheen       - a top specular highlight band, like light hitting the surface
+    -- props.Layers lets a specific call opt out of layers 2 & 3 entirely (e.g. content that
+    -- needs AutomaticSize - Frost/Sheen are Scale-sized to the base, so letting the base
+    -- auto-size off its own children while they're present would make its size depend on
+    -- itself - see the dock fix and the Paragraph card above for the concrete case).
+    -- ============================================================
+    local useLayers = props.Layers
+    if useLayers == nil then useLayers = MacUI.GlassStyle.Layers end
     if useLayers then
-        -- ========== LAYER 2: Frost / diffusion ==========
+        -- Layer 2: Frost / Depth - diagonal gradient instead of a flat wash, so the glass
+        -- actually reads as glass instead of a slightly-different-colored flat panel.
         local frost = Instance.new("Frame")
         frost.Name = "Frost"
         frost.Size = UDim2.new(1, 0, 1, 0)
         frost.BackgroundColor3 = theme.Glass or color
-        frost.BackgroundTransparency = 0.78
+        frost.BackgroundTransparency = 0
         frost.BorderSizePixel = 0
         frost.ZIndex = 2
         frost.Parent = base
@@ -657,22 +740,25 @@ local function CreateGlassFrame(parent, props)
         frostCorner.CornerRadius = UDim.new(0, radius)
         frostCorner.Parent = frost
 
-        -- Subtle vertical depth gradient on frost
-        local frostGrad = Instance.new("UIGradient")
-        frostGrad.Rotation = 90
-        frostGrad.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.15),
-            NumberSequenceKeypoint.new(0.45, 0.55),
-            NumberSequenceKeypoint.new(1, 0.25)
+        local frostGradient = Instance.new("UIGradient")
+        frostGradient.Name = "FrostGradient"
+        frostGradient.Rotation = 115
+        frostGradient.Color = ColorSequence.new(theme.Glass or color)
+        frostGradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.62),
+            NumberSequenceKeypoint.new(0.45, 0.88),
+            NumberSequenceKeypoint.new(0.55, 0.88),
+            NumberSequenceKeypoint.new(1, 0.7)
         })
-        frostGrad.Parent = frost
+        frostGradient.Parent = frost
 
-        -- ========== LAYER 3: Specular sheen + edge highlight ==========
+        -- Layer 3: Sheen - top specular highlight, tuned brighter/taller than before so it
+        -- actually reads instead of disappearing into the base tint.
         local sheen = Instance.new("Frame")
         sheen.Name = "Sheen"
-        sheen.Size = UDim2.new(1, 0, 0.48, 0)
+        sheen.Size = UDim2.new(1, 0, 0.5, 0)
         sheen.BackgroundColor3 = theme.Sheen or Color3.new(1, 1, 1)
-        sheen.BackgroundTransparency = 0.86
+        sheen.BackgroundTransparency = 0.78
         sheen.BorderSizePixel = 0
         sheen.ZIndex = 3
         sheen.Parent = base
@@ -685,57 +771,30 @@ local function CreateGlassFrame(parent, props)
         sheenGradient.Rotation = 90
         sheenGradient.Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.35),
-            NumberSequenceKeypoint.new(0.35, 0.72),
-            NumberSequenceKeypoint.new(0.7, 0.95),
+            NumberSequenceKeypoint.new(0.55, 0.82),
             NumberSequenceKeypoint.new(1, 1)
         })
         sheenGradient.Parent = sheen
 
-        -- Soft inner edge highlight (liquid glass rim light)
-        local rim = Instance.new("Frame")
-        rim.Name = "RimLight"
-        rim.Size = UDim2.new(1, -2, 1, -2)
-        rim.Position = UDim2.new(0, 1, 0, 1)
-        rim.BackgroundTransparency = 1
-        rim.BorderSizePixel = 0
-        rim.ZIndex = 4
-        rim.Parent = base
-
-        local rimCorner = Instance.new("UICorner")
-        rimCorner.CornerRadius = UDim.new(0, math.max(0, radius - 1))
-        rimCorner.Parent = rim
-
-        local rimStroke = Instance.new("UIStroke")
-        rimStroke.Name = "RimStroke"
-        rimStroke.Color = theme.Sheen or Color3.fromRGB(255, 255, 255)
-        rimStroke.Transparency = 0.82
-        rimStroke.Thickness = 1.2
-        rimStroke.Parent = rim
-
-        -- Optional metaball soft glow (organic edge bloom)
-        if useMetaball then
-            local glow = Instance.new("Frame")
-            glow.Name = "MetaballGlow"
-            glow.Size = UDim2.new(1, 10, 1, 10)
-            glow.Position = UDim2.new(0, -5, 0, -5)
-            glow.BackgroundColor3 = theme.Accent or Color3.fromRGB(10, 132, 255)
-            glow.BackgroundTransparency = 0.88
-            glow.BorderSizePixel = 0
-            glow.ZIndex = 0
-            glow.Parent = container
-
-            local glowCorner = Instance.new("UICorner")
-            glowCorner.CornerRadius = UDim.new(0, radius + 6)
-            glowCorner.Parent = glow
+        -- Optional 4th layer: slow-drifting liquid blobs behind the tint (opt-in; see
+        -- MacUI.AddMetaballs). Off by default since it's extra always-running tweens.
+        if props.Metaballs then
+            MacUI.AddMetaballs(base, {
+                Count = props.MetaballCount or 3,
+                Color = props.MetaballColor or theme.Accent,
+                Size = props.MetaballSize or {40, 80},
+                Speed = props.MetaballSpeed or 5,
+                ZIndex = 1
+            })
         end
     end
 
-    -- Outer border stroke (soft white edge)
+    -- Border stroke (soft white edge like macOS liquid glass)
     if MacUI.GlassStyle.Border then
         local stroke = Instance.new("UIStroke")
         stroke.Name = "GlassStroke"
         stroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
-        stroke.Transparency = theme.BorderTransparency or 0.68
+        stroke.Transparency = theme.BorderTransparency or 0.7
         stroke.Thickness = 1
         stroke.Parent = base
     end
@@ -1013,6 +1072,18 @@ end
 -- ============================================================
 function MacUI:CreateWindow(options)
     options = options or {}
+
+    -- Shadows the module-level TrackConnection for the rest of this function (including
+    -- every nested Section:CreateX closure defined below): connections now land in this
+    -- window's own table instead of the module-level one, which nothing ever disconnected.
+    -- Window:Destroy() reads this same table, so destroying a window now actually cleans up
+    -- its input connections instead of leaking all of them.
+    local windowConnections = {}
+    local function TrackConnection(conn)
+        table.insert(windowConnections, conn)
+        return conn
+    end
+
     local name = options.Name or "MacUI"
     local subtitle = options.Subtitle or ""
     local themeName = options.Theme or "Liquid Glass Dark"
@@ -1022,6 +1093,8 @@ function MacUI:CreateWindow(options)
     local showBoot = options.Boot ~= false
     local useDock = options.Dock ~= false
     local configSaving = options.ConfigurationSaving
+    local useMetaballs = options.Metaballs == true
+    local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
 
     -- Executor config support: creates (or reuses) the save folder/file and schedules an
     -- automatic load once the window finishes opening.
@@ -1049,7 +1122,8 @@ function MacUI:CreateWindow(options)
     local windowContainer = CreateGlassFrame(screenGui, {
         Radius = 20,
         Transparency = acrylic and (theme.GlassTransparency or MacUI.GlassStyle.Transparency) or 0.08,
-        Color = theme.Background
+        Color = theme.Background,
+        Metaballs = useMetaballs -- opt-in: slow-drifting liquid blobs behind the window tint
     })
     windowContainer.Name = "Window"
     windowContainer.Size = size
@@ -1127,6 +1201,66 @@ function MacUI:CreateWindow(options)
     searchBtn.ZIndex = 11
     searchBtn.Parent = titleBar
 
+    -- Key-system battery indicator: remaining time on the current key session, shown as a
+    -- draining percentage. Only created when a key system is actually configured - it has
+    -- nothing meaningful to show otherwise.
+    if MacUI.KeySystem.Enabled then
+        local keyBattery = CreateGlassFrame(titleBar, {
+            Radius = 6, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false
+        })
+        keyBattery.Size = UDim2.new(0, 64, 0, 22)
+        keyBattery.Position = UDim2.new(1, -104, 0.5, -11)
+        keyBattery.ZIndex = 11
+        local battBase = GetGlassBase(keyBattery)
+        battBase.ClipsDescendants = true
+
+        local fill = Instance.new("Frame")
+        fill.Name = "Fill"
+        fill.Size = UDim2.new(1, 0, 1, 0)
+        fill.BackgroundColor3 = theme.Success
+        fill.BackgroundTransparency = 0.75
+        fill.BorderSizePixel = 0
+        fill.Parent = battBase
+
+        local pctLbl = Instance.new("TextLabel")
+        pctLbl.Size = UDim2.new(1, 0, 1, 0)
+        pctLbl.BackgroundTransparency = 1
+        pctLbl.Text = "--%"
+        pctLbl.TextColor3 = theme.Text
+        pctLbl.Font = Enum.Font.GothamMedium
+        pctLbl.TextSize = 12
+        pctLbl.ZIndex = 12
+        pctLbl.Parent = battBase
+
+        -- The drain rate is just Remaining / Total - a short Timer naturally drains faster
+        -- in real time than a long one, no extra logic needed.
+        local function RefreshBattery()
+            if not (keyBattery and keyBattery.Parent) then return false end
+            local status = MacUI:GetKeyStatus()
+            if status.Remaining and status.Total and status.Total > 0 then
+                local pct = math.clamp(status.Remaining / status.Total, 0, 1)
+                pctLbl.Text = math.floor(pct * 100) .. "%"
+                MacUI.Tween(fill, {Time = 0.3}, {Size = UDim2.new(pct, 0, 1, 0)})
+                local color = theme.Success
+                if pct < 0.2 then color = theme.Danger
+                elseif pct < 0.5 then color = theme.Warning end
+                fill.BackgroundColor3 = color
+            else
+                pctLbl.Text = status.Valid and "OK" or "..."
+                fill.Size = UDim2.new(1, 0, 1, 0)
+            end
+            return true
+        end
+        RefreshBattery()
+        -- Self-terminating: stops once keyBattery (and the window it's parented under) is
+        -- destroyed, no manual connection bookkeeping required.
+        task.spawn(function()
+            while RefreshBattery() do
+                task.wait(1)
+            end
+        end)
+    end
+
     -- Content area (full width when using dock, otherwise with sidebar)
     local content = Instance.new("Frame")
     content.Name = "Content"
@@ -1174,7 +1308,8 @@ function MacUI:CreateWindow(options)
         dockContainer = CreateGlassFrame(window, {
             Radius = 18,
             Transparency = theme.DockTransparency or theme.GlassTransparency or 0.28,
-            Color = theme.Dock or theme.SecondaryBackground
+            Color = theme.Dock or theme.SecondaryBackground,
+            Clip = false -- hover-magnified icons are meant to bulge slightly past the edge
         })
         dockContainer.Name = "Dock"
         -- Fixed, manually-computed size (see Window:_UpdateDockWidth). AutomaticSize chained
@@ -1216,6 +1351,27 @@ function MacUI:CreateWindow(options)
         dockLayout.Parent = dockItems
     end
 
+    -- Overlay layer for floating popups (dropdown lists, the color picker board). These
+    -- used to be parented inside the scrollable tab content, whose ClipsDescendants = true
+    -- would cut them off - including clipping their rounded corners - whenever they
+    -- extended past the visible content area. The overlay sits directly on the window's
+    -- own GlassBase instead, so popups are still bounded by the window's rounded edge but
+    -- are no longer clipped by the inner scroll view.
+    local overlay = Instance.new("Frame")
+    overlay.Name = "Overlay"
+    overlay.BackgroundTransparency = 1
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.ZIndex = 200
+    overlay.Parent = window
+
+    -- Positions `frame` (already parented to `overlay`) directly under `anchor`, converting
+    -- from screen-space AbsolutePosition into the overlay's own offset space.
+    local function AnchorOverlayFrame(frame, anchor, offsetX, offsetY)
+        local x = anchor.AbsolutePosition.X - window.AbsolutePosition.X + (offsetX or 0)
+        local y = anchor.AbsolutePosition.Y + anchor.AbsoluteSize.Y - window.AbsolutePosition.Y + (offsetY or 4)
+        frame.Position = UDim2.new(0, x, 0, y)
+    end
+
     -- Window object
     local Window = {
         ScreenGui = screenGui,
@@ -1224,6 +1380,7 @@ function MacUI:CreateWindow(options)
         TitleBar = titleBar,
         Content = contentScroll,
         Dock = dockContainer,
+        Overlay = overlay,
         Tabs = {},
         TabOrder = {},
         CurrentTab = nil,
@@ -1231,12 +1388,23 @@ function MacUI:CreateWindow(options)
         OriginalPos = windowContainer.Position,
         IsMaximized = false,
         IsMinimized = false,
-        Connections = {},
+        Connections = windowConnections,
         Elements = {},
         FlagElements = {},
         UseDock = useDock,
+        ToggleKey = toggleKey,
+        _NotifiedHidden = false,
         _PendingConfigLoad = pendingConfigLoad
     }
+
+    -- Show/hide hotkey. Reads Window.ToggleKey live each press, so rebinding it from the
+    -- Settings tab (see CreateSettingsTab) takes effect immediately without reconnecting.
+    TrackConnection(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Window.ToggleKey then
+            Window:Minimize()
+        end
+    end))
 
     -- Dragging
     local dragging, dragStart, startPos
@@ -1287,8 +1455,71 @@ function MacUI:CreateWindow(options)
     SetupHover(minBtn, Color3.fromRGB(255, 189, 46))
     SetupHover(maxBtn, Color3.fromRGB(40, 200, 64))
 
+    -- Recolors every control already on the window when the theme changes. Controls bake
+    -- their colors in as plain Color3 values at creation time (no live binding), so
+    -- switching themes previously only recolored the window chrome (title bar, dock) and
+    -- left every Button/Toggle/Slider/etc already on screen in the old colors - this is
+    -- what "theme not working on UI" was actually describing. This walks every tracked
+    -- element and swaps any color that still exactly matches a role from the OLD theme
+    -- (Text, SecondaryText, TertiaryBackground, SecondaryBackground, Accent, Glass, Sheen,
+    -- Border) for the same role in the new one. A control's own picked value (e.g. a
+    -- ColorPicker's current color) essentially never exactly equals a theme color, so it's
+    -- safely left alone.
+    local function RethemeInstance(inst, oldTheme, newTheme)
+        if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+            if inst.TextColor3 == oldTheme.Text then
+                inst.TextColor3 = newTheme.Text
+            elseif inst.TextColor3 == (oldTheme.SecondaryText) then
+                inst.TextColor3 = newTheme.SecondaryText
+            end
+            if inst:IsA("TextBox") and inst.PlaceholderColor3 == oldTheme.SecondaryText then
+                inst.PlaceholderColor3 = newTheme.SecondaryText
+            end
+        end
+        if inst.Name == "GlassBase" then
+            local old = inst.BackgroundColor3
+            if old == oldTheme.TertiaryBackground then inst.BackgroundColor3 = newTheme.TertiaryBackground
+            elseif old == oldTheme.SecondaryBackground then inst.BackgroundColor3 = newTheme.SecondaryBackground
+            elseif old == oldTheme.Background then inst.BackgroundColor3 = newTheme.Background
+            end
+            local frost = inst:FindFirstChild("Frost")
+            if frost then
+                frost.BackgroundColor3 = newTheme.Glass or newTheme.Background
+                local fg = frost:FindFirstChild("FrostGradient")
+                if fg then fg.Color = ColorSequence.new(newTheme.Glass or newTheme.Background) end
+            end
+            local sheen = inst:FindFirstChild("Sheen")
+            if sheen then sheen.BackgroundColor3 = newTheme.Sheen or Color3.new(1, 1, 1) end
+            local stroke = inst:FindFirstChild("GlassStroke")
+            if stroke then
+                stroke.Color = newTheme.Border or Color3.fromRGB(255, 255, 255)
+                stroke.Transparency = newTheme.BorderTransparency or 0.7
+            end
+        elseif inst:IsA("Frame") and inst.Name ~= "Frost" and inst.Name ~= "Sheen" then
+            local old = inst.BackgroundColor3
+            if old == oldTheme.TertiaryBackground then inst.BackgroundColor3 = newTheme.TertiaryBackground
+            elseif old == oldTheme.SecondaryBackground then inst.BackgroundColor3 = newTheme.SecondaryBackground
+            elseif old == oldTheme.Accent then inst.BackgroundColor3 = newTheme.Accent
+            end
+        end
+    end
+
+    local function RethemeTree(root, oldTheme, newTheme)
+        if not root then return end
+        RethemeInstance(root, oldTheme, newTheme)
+        for _, inst in ipairs(root:GetDescendants()) do
+            RethemeInstance(inst, oldTheme, newTheme)
+        end
+    end
+
     function Window:ApplyTheme(t)
+        local oldTheme = theme
         theme = t
+        if oldTheme and oldTheme ~= t then
+            for _, el in ipairs(self.Elements) do
+                if el.Object then RethemeTree(el.Object, oldTheme, t) end
+            end
+        end
         local winBase = GetGlassBase(windowContainer)
         if winBase then
             winBase.BackgroundColor3 = t.Background
@@ -1337,11 +1568,7 @@ function MacUI:CreateWindow(options)
                     end
                 end
                 if indicator then
-                    for _, blob in ipairs(indicator:GetChildren()) do
-                        if blob:IsA("Frame") then
-                            blob.BackgroundColor3 = t.Accent
-                        end
-                    end
+                    indicator.BackgroundColor3 = t.Accent
                 end
             end
         end
@@ -1352,21 +1579,39 @@ function MacUI:CreateWindow(options)
         end
     end
 
+    -- Minimize now actually hides the hub (it used to shrink to a small pill that stayed
+    -- on screen, which read as broken/half-hidden). The first time it's hidden, it notifies
+    -- the person once with the key that brings it back; it won't repeat that notification
+    -- on later hides. The same key (Window.ToggleKey, rebindable from Settings) calls this
+    -- same method, so pressing it or clicking the dock-minimize button behave identically.
     function Window:Minimize()
         if self.IsMinimized then
-            MacUI.Tween(windowContainer, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
-                Size = self.OriginalSize,
-                Position = self.OriginalPos
+            windowContainer.Visible = true
+            windowContainer.Size = UDim2.new(0, 0, 0, 0)
+            MacUI.Tween(windowContainer, {Time = 0.3, EasingStyle = Enum.EasingStyle.Back, EasingDirection = Enum.EasingDirection.Out}, {
+                Size = self.OriginalSize
             })
             self.IsMinimized = false
         else
             self.OriginalSize = windowContainer.Size
-            self.OriginalPos = windowContainer.Position
-            MacUI.Tween(windowContainer, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
-                Size = UDim2.new(0, 220, 0, 44),
-                Position = UDim2.new(0, 24, 1, -70)
+            local t = MacUI.Tween(windowContainer, {Time = 0.25, EasingStyle = Enum.EasingStyle.Quint}, {
+                Size = UDim2.new(0, 0, 0, 0)
             })
+            local function HideNow()
+                windowContainer.Visible = false
+            end
+            if t then t.Completed:Connect(HideNow) else HideNow() end
             self.IsMinimized = true
+
+            if not self._NotifiedHidden then
+                self._NotifiedHidden = true
+                MacUI:Notify({
+                    Title = "Hub Hidden",
+                    Content = "Press " .. self.ToggleKey.Name .. " to show it again.",
+                    Icon = "eye-off",
+                    Duration = 5
+                })
+            end
         end
     end
 
@@ -1402,8 +1647,10 @@ function MacUI:CreateWindow(options)
         end
     end
 
+    -- Toggle is now just an alias for Minimize - a single hide/show path (with the
+    -- animation and one-time notice) instead of two inconsistent ones.
     function Window:Toggle()
-        windowContainer.Visible = not windowContainer.Visible
+        self:Minimize()
     end
 
     function Window:Destroy()
@@ -1493,6 +1740,13 @@ function MacUI:CreateWindow(options)
                 MacUI:SetAccessibility({ReducedMotion = val})
             end
         })
+        accessibility:CreateKeybind({
+            Name = "Hide/Show Hub",
+            CurrentKeybind = self.ToggleKey,
+            OnChange = function(key)
+                self.ToggleKey = key
+            end
+        })
 
         if MacUI.Config.Folder and MacUI.Config.File then
             local configSection = tab:CreateSection("Configuration")
@@ -1567,11 +1821,7 @@ function MacUI:CreateWindow(options)
                         })
                     end
                     if indicator then
-                        for _, blob in ipairs(indicator:GetChildren()) do
-                            if blob:IsA("Frame") then
-                                MacUI.Tween(blob, {Time = 0.22}, {BackgroundTransparency = 1})
-                            end
-                        end
+                        MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 1})
                     end
                 end
             end
@@ -1605,19 +1855,7 @@ function MacUI:CreateWindow(options)
                     MacUI.Bounce(icon, 14, 0.42)
                 end
                 if indicator then
-                    -- Metaball blobs fade in with slight stagger for organic feel
-                    local blobs = {"Blob1", "Blob2", "Blob3"}
-                    for i, name in ipairs(blobs) do
-                        local blob = indicator:FindFirstChild(name)
-                        if blob then
-                            blob.BackgroundColor3 = theme.Accent
-                            task.delay((i - 1) * 0.04, function()
-                                MacUI.Tween(blob, {Time = 0.28, EasingStyle = Enum.EasingStyle.Back}, {
-                                    BackgroundTransparency = (i == 1) and 0.15 or 0.45
-                                })
-                            end)
-                        end
-                    end
+                    MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 0})
                 end
             end
         end
@@ -1646,50 +1884,18 @@ function MacUI:CreateWindow(options)
             icon.ZIndex = 22
             icon.Parent = dockBtn
 
-            -- Metaball-style soft active indicator (overlapping soft circles for organic look)
             local indicator = Instance.new("Frame")
             indicator.Name = "Indicator"
-            indicator.Size = UDim2.new(0, 18, 0, 8)
-            indicator.Position = UDim2.new(0.5, -9, 1, -7)
+            indicator.Size = UDim2.new(0, 5, 0, 5)
+            indicator.Position = UDim2.new(0.5, -2.5, 1, -6)
+            indicator.BackgroundColor3 = theme.Accent
             indicator.BackgroundTransparency = 1
             indicator.ZIndex = 22
             indicator.Parent = dockBtn
 
-            local blob1 = Instance.new("Frame")
-            blob1.Name = "Blob1"
-            blob1.Size = UDim2.new(0, 10, 0, 6)
-            blob1.Position = UDim2.new(0.5, -5, 0.5, -3)
-            blob1.BackgroundColor3 = theme.Accent
-            blob1.BackgroundTransparency = 1
-            blob1.ZIndex = 23
-            blob1.Parent = indicator
-            local b1c = Instance.new("UICorner")
-            b1c.CornerRadius = UDim.new(1, 0)
-            b1c.Parent = blob1
-
-            local blob2 = Instance.new("Frame")
-            blob2.Name = "Blob2"
-            blob2.Size = UDim2.new(0, 7, 0, 5)
-            blob2.Position = UDim2.new(0, 1, 0.5, -2.5)
-            blob2.BackgroundColor3 = theme.Accent
-            blob2.BackgroundTransparency = 1
-            blob2.ZIndex = 22
-            blob2.Parent = indicator
-            local b2c = Instance.new("UICorner")
-            b2c.CornerRadius = UDim.new(1, 0)
-            b2c.Parent = blob2
-
-            local blob3 = Instance.new("Frame")
-            blob3.Name = "Blob3"
-            blob3.Size = UDim2.new(0, 7, 0, 5)
-            blob3.Position = UDim2.new(1, -8, 0.5, -2.5)
-            blob3.BackgroundColor3 = theme.Accent
-            blob3.BackgroundTransparency = 1
-            blob3.ZIndex = 22
-            blob3.Parent = indicator
-            local b3c = Instance.new("UICorner")
-            b3c.CornerRadius = UDim.new(1, 0)
-            b3c.Parent = blob3
+            local indCorner = Instance.new("UICorner")
+            indCorner.CornerRadius = UDim.new(1, 0)
+            indCorner.Parent = indicator
 
             -- Hover magnification (classic dock feel)
             TrackConnection(dockBtn.MouseEnter:Connect(function()
@@ -2009,7 +2215,7 @@ function MacUI:CreateWindow(options)
                 return {Set = Update, Get = function() return current end}
             end
 
-            -- Dropdown (fixed: proper glass corners, overlay parenting, outside-click close, smooth open)
+            -- Dropdown
             function Section:CreateDropdown(opts)
                 opts = opts or {}
                 local flag = opts.Flag or opts.Name
@@ -2037,182 +2243,85 @@ function MacUI:CreateWindow(options)
                 lbl.TextXAlignment = Enum.TextXAlignment.Left
                 lbl.Parent = row
 
-                -- Trigger button with consistent corner + glass feel
                 local dropBtn = Instance.new("TextButton")
                 dropBtn.Size = UDim2.new(0.5, 0, 0, 30)
                 dropBtn.Position = UDim2.new(0.45, 0, 0.5, -15)
                 dropBtn.BackgroundColor3 = theme.TertiaryBackground
-                dropBtn.BackgroundTransparency = 0.25
-                dropBtn.Text = "  " .. (current or "")
+                dropBtn.BackgroundTransparency = 0.3
+                dropBtn.Text = current or ""
                 dropBtn.TextColor3 = theme.Text
                 dropBtn.Font = Enum.Font.Gotham
                 dropBtn.TextSize = 13
-                dropBtn.TextXAlignment = Enum.TextXAlignment.Left
                 dropBtn.AutoButtonColor = false
-                dropBtn.ClipsDescendants = true
                 dropBtn.Parent = row
 
                 local dropCorner = Instance.new("UICorner")
                 dropCorner.CornerRadius = UDim.new(0, 8)
                 dropCorner.Parent = dropBtn
 
-                local dropStroke = Instance.new("UIStroke")
-                dropStroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
-                dropStroke.Transparency = 0.75
-                dropStroke.Thickness = 1
-                dropStroke.Parent = dropBtn
-
-                -- Chevron
-                local chevron = Instance.new("ImageLabel")
-                chevron.Name = "Chevron"
-                chevron.Size = UDim2.new(0, 14, 0, 14)
-                chevron.Position = UDim2.new(1, -22, 0.5, -7)
-                chevron.BackgroundTransparency = 1
-                chevron.Image = "rbxassetid://6031091004" -- simple down arrow fallback
-                chevron.ImageColor3 = theme.SecondaryText
-                chevron.Rotation = 0
-                chevron.ZIndex = 2
-                chevron.Parent = dropBtn
-                -- Prefer Lucide if available
-                pcall(function() MacUI.ApplyIcon(chevron, "chevron-down") end)
-
                 local open = false
                 local listFrame
-                local outsideConn
-
-                local function CloseList()
-                    if listFrame then
-                        local lf = listFrame
-                        listFrame = nil
-                        open = false
-                        if outsideConn then
-                            outsideConn:Disconnect()
-                            outsideConn = nil
-                        end
-                        MacUI.Tween(chevron, {Time = 0.18}, {Rotation = 0})
-                        MacUI.Tween(lf, {Time = 0.18, EasingStyle = Enum.EasingStyle.Quint}, {
-                            Size = UDim2.new(lf.Size.X.Scale, lf.Size.X.Offset, 0, 0)
-                        })
-                        task.delay(0.2, function()
-                            if lf and lf.Parent then lf:Destroy() end
-                        end)
-                    end
-                end
 
                 local function SelectOption(opt, silent)
                     current = opt
-                    dropBtn.Text = "  " .. tostring(opt)
+                    dropBtn.Text = opt
                     if not silent and opts.Callback then
                         local ok, err = pcall(opts.Callback, opt)
                         if not ok then warn("[MacUI] Callback error:", err) end
                     end
                     if flag then MacUI.Config.Data[flag] = opt end
-                    CloseList()
                 end
 
                 TrackConnection(dropBtn.MouseButton1Click:Connect(function()
+                    open = not open
                     if open then
-                        CloseList()
-                        return
-                    end
-                    open = true
-                    MacUI.Tween(chevron, {Time = 0.18}, {Rotation = 180})
-
-                    -- Parent to the window glass base so the list is never clipped by scroll/section
-                    local host = Window.GlassBase or row
-                    local itemH = 32
-                    local maxVisible = math.min(#options, 7)
-                    local listH = maxVisible * itemH + 8
-
-                    listFrame = CreateGlassFrame(host, {
-                        Radius = 10,
-                        Transparency = 0.06,
-                        Color = theme.SecondaryBackground,
-                        Layers = true
-                    })
-                    listFrame.Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0)
-                    listFrame.Position = UDim2.new(0, dropBtn.AbsolutePosition.X - host.AbsolutePosition.X, 0, dropBtn.AbsolutePosition.Y - host.AbsolutePosition.Y + dropBtn.AbsoluteSize.Y + 6)
-                    listFrame.ZIndex = 80
-                    listFrame.ClipsDescendants = true
-
-                    local listBase = GetGlassBase(listFrame)
-                    if listBase then
+                        -- Parented to the window's overlay layer (not `row`) so the list
+                        -- isn't clipped - rounded corners included - by the scrollable tab
+                        -- content it would otherwise sit inside.
+                        listFrame = CreateGlassFrame(Window.Overlay, {Radius = 8, Transparency = 0.08, Color = theme.SecondaryBackground})
+                        listFrame.Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, math.min(#options, 6) * 30)
+                        listFrame.ZIndex = 50
+                        AnchorOverlayFrame(listFrame, dropBtn)
+                        local listBase = GetGlassBase(listFrame)
                         listBase.ClipsDescendants = true
+
+                        local listScroll = Instance.new("ScrollingFrame")
+                        listScroll.Size = UDim2.new(1, 0, 1, 0)
+                        listScroll.BackgroundTransparency = 1
+                        listScroll.BorderSizePixel = 0
+                        listScroll.ScrollBarThickness = 3
+                        listScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 30)
+                        listScroll.ZIndex = 51
+                        listScroll.Parent = listBase
+
+                        for i, opt in ipairs(options) do
+                            local item = Instance.new("TextButton")
+                            item.Size = UDim2.new(1, 0, 0, 30)
+                            item.Position = UDim2.new(0, 0, 0, (i-1)*30)
+                            item.BackgroundTransparency = (opt == current) and 0.85 or 1
+                            item.BackgroundColor3 = theme.Accent
+                            item.Text = opt
+                            item.TextColor3 = theme.Text
+                            item.Font = Enum.Font.Gotham
+                            item.TextSize = 13
+                            item.AutoButtonColor = false
+                            item.ZIndex = 52
+                            item.Parent = listScroll
+                            TrackConnection(item.MouseEnter:Connect(function()
+                                MacUI.Tween(item, {Time = 0.1}, {BackgroundTransparency = 0.78})
+                            end))
+                            TrackConnection(item.MouseLeave:Connect(function()
+                                MacUI.Tween(item, {Time = 0.1}, {BackgroundTransparency = (opt == current) and 0.85 or 1})
+                            end))
+                            TrackConnection(item.MouseButton1Click:Connect(function()
+                                SelectOption(opt)
+                                if listFrame then listFrame:Destroy() end
+                                open = false
+                            end))
+                        end
+                    else
+                        if listFrame then listFrame:Destroy() end
                     end
-
-                    local listScroll = Instance.new("ScrollingFrame")
-                    listScroll.Size = UDim2.new(1, 0, 1, 0)
-                    listScroll.BackgroundTransparency = 1
-                    listScroll.BorderSizePixel = 0
-                    listScroll.ScrollBarThickness = 4
-                    listScroll.ScrollBarImageColor3 = theme.Border
-                    listScroll.CanvasSize = UDim2.new(0, 0, 0, #options * itemH)
-                    listScroll.AutomaticCanvasSize = Enum.AutomaticSize.None
-                    listScroll.ZIndex = 81
-                    listScroll.Parent = listBase or listFrame
-
-                    local pad = Instance.new("UIPadding")
-                    pad.PaddingTop = UDim.new(0, 4)
-                    pad.PaddingBottom = UDim.new(0, 4)
-                    pad.Parent = listScroll
-
-                    for i, opt in ipairs(options) do
-                        local item = Instance.new("TextButton")
-                        item.Size = UDim2.new(1, -8, 0, itemH - 2)
-                        item.Position = UDim2.new(0, 4, 0, 4 + (i - 1) * itemH)
-                        item.BackgroundTransparency = (opt == current) and 0.75 or 1
-                        item.BackgroundColor3 = theme.Accent
-                        item.Text = "  " .. tostring(opt)
-                        item.TextColor3 = theme.Text
-                        item.Font = Enum.Font.Gotham
-                        item.TextSize = 13
-                        item.TextXAlignment = Enum.TextXAlignment.Left
-                        item.AutoButtonColor = false
-                        item.ZIndex = 82
-                        item.Parent = listScroll
-
-                        local itemCorner = Instance.new("UICorner")
-                        itemCorner.CornerRadius = UDim.new(0, 6)
-                        itemCorner.Parent = item
-
-                        TrackConnection(item.MouseEnter:Connect(function()
-                            MacUI.Tween(item, {Time = 0.12}, {BackgroundTransparency = 0.7})
-                        end))
-                        TrackConnection(item.MouseLeave:Connect(function()
-                            MacUI.Tween(item, {Time = 0.12}, {
-                                BackgroundTransparency = (opt == current) and 0.75 or 1
-                            })
-                        end))
-                        TrackConnection(item.MouseButton1Click:Connect(function()
-                            SelectOption(opt)
-                        end))
-                    end
-
-                    -- Animate open
-                    MacUI.Tween(listFrame, {Time = 0.22, EasingStyle = Enum.EasingStyle.Quint}, {
-                        Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, listH)
-                    })
-
-                    -- Close when clicking outside
-                    task.defer(function()
-                        outsideConn = UserInputService.InputBegan:Connect(function(input)
-                            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
-                                return
-                            end
-                            if not listFrame or not listFrame.Parent then return end
-                            local pos = input.Position
-                            local abs = listFrame.AbsolutePosition
-                            local size = listFrame.AbsoluteSize
-                            local insideList = pos.X >= abs.X and pos.X <= abs.X + size.X and pos.Y >= abs.Y and pos.Y <= abs.Y + size.Y
-                            local btnAbs = dropBtn.AbsolutePosition
-                            local btnSize = dropBtn.AbsoluteSize
-                            local insideBtn = pos.X >= btnAbs.X and pos.X <= btnAbs.X + btnSize.X and pos.Y >= btnAbs.Y and pos.Y <= btnAbs.Y + btnSize.Y
-                            if not insideList and not insideBtn then
-                                CloseList()
-                            end
-                        end)
-                        TrackConnection(outsideConn)
-                    end)
                 end))
 
                 if hasSaved and opts.Callback then
@@ -2299,6 +2408,7 @@ function MacUI:CreateWindow(options)
                 lbl.TextSize = 14
                 lbl.TextXAlignment = Enum.TextXAlignment.Left
                 lbl.Parent = sectionContent
+                table.insert(Window.Elements, {Type = "Label", Name = opts.Name, Object = lbl})
                 return lbl
             end
 
@@ -2409,6 +2519,14 @@ function MacUI:CreateWindow(options)
                         keyBtn.Text = current.Name
                         listening = false
                         if flag then MacUI.Config.Data[flag] = current.Name end
+                        -- OnChange fires when the binding itself changes (rebinding), as
+                        -- opposed to Callback, which fires each time the bound key is
+                        -- pressed. Use OnChange when something else (like Window.ToggleKey)
+                        -- needs to track which key is currently assigned.
+                        if opts.OnChange then
+                            local ok, err = pcall(opts.OnChange, current)
+                            if not ok then warn("[MacUI] OnChange error:", err) end
+                        end
                     end
                     if not gp and input.KeyCode == current and opts.Callback then
                         local ok, err = pcall(opts.Callback)
@@ -2498,10 +2616,13 @@ function MacUI:CreateWindow(options)
                 end
 
                 local function OpenPanel()
-                    panel = CreateGlassFrame(row, {Radius = 12, Transparency = 0.06, Color = theme.SecondaryBackground})
+                    -- Parented to the window's overlay layer so the board isn't clipped by
+                    -- the scrollable tab content (same fix as the dropdown list above).
+                    panel = CreateGlassFrame(Window.Overlay, {Radius = 12, Transparency = 0.06, Color = theme.SecondaryBackground})
                     panel.Size = UDim2.new(0, 190, 0, 152)
-                    panel.Position = UDim2.new(1, -190, 1, 8)
                     panel.ZIndex = 60
+                    -- Right-align the panel's edge with the swatch's edge (panel is wider).
+                    AnchorOverlayFrame(panel, swatchContainer, swatchContainer.AbsoluteSize.X - 190)
                     local base = GetGlassBase(panel)
                     base.ClipsDescendants = true
 
@@ -2820,6 +2941,300 @@ function MacUI:CreateWindow(options)
 
     table.insert(self.Windows, Window)
     return Window
+end
+
+-- ============================================================
+-- KEY SYSTEM
+-- Gate a script behind a key, with the key and/or its validity window optionally fetched
+-- from a site instead of hardcoded, a re-entry timer, and a battery-style indicator of how
+-- much of that timer is left. All network/file calls are pcall-wrapped: a site being down
+-- or an executor lacking file functions degrades gracefully instead of erroring.
+-- ============================================================
+MacUI.KeySystem = {
+    Enabled = false,
+    Key = nil,              -- static expected key (ignored if GetKeySite is set)
+    GetKeySite = nil,        -- URL returning the current valid key as plain text
+    KeyLink = nil,            -- URL for a "Copy Key Link" button (uses setclipboard)
+    Timer = 0,                 -- seconds the key stays valid once entered; 0 = never expires
+    GetTimeSite = nil,          -- URL returning the timer length (seconds) as plain text
+    GetTimeFromSite = false,
+    Title = "Key System",
+    Note = "Enter your key to continue",
+    SaveFolder = "MacUI/KeySystem",
+    SaveFile = "session"
+}
+
+function MacUI:SetupKeySystem(opts)
+    opts = opts or {}
+    for k, v in pairs(opts) do
+        self.KeySystem[k] = v
+    end
+end
+
+local function HttpGetTrimmed(url)
+    if not url then return nil end
+    local ok, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if ok and type(result) == "string" then
+        return (result:gsub("^%s+", ""):gsub("%s+$", ""))
+    end
+    return nil
+end
+
+-- Resolves the expected key: the remote site's response if GetKeySite is set and reachable,
+-- otherwise the static Key. Returns nil if neither is usable.
+function MacUI:_ResolveExpectedKey()
+    local ks = self.KeySystem
+    if ks.GetKeySite then
+        local remote = HttpGetTrimmed(ks.GetKeySite)
+        if remote and remote ~= "" then return remote end
+        warn("[MacUI] KeySystem: couldn't reach GetKeySite, falling back to KeySystem.Key")
+    end
+    return ks.Key
+end
+
+-- Resolves how long (seconds) a successful key entry stays valid.
+function MacUI:_ResolveTimerSeconds()
+    local ks = self.KeySystem
+    if ks.GetTimeFromSite and ks.GetTimeSite then
+        local remote = HttpGetTrimmed(ks.GetTimeSite)
+        local n = remote and tonumber(remote)
+        if n then return n end
+        warn("[MacUI] KeySystem: couldn't reach GetTimeSite, falling back to KeySystem.Timer")
+    end
+    return ks.Timer or 0
+end
+
+local function KeySessionPath()
+    local ks = MacUI.KeySystem
+    return (ks.SaveFolder or "MacUI/KeySystem") .. "/" .. (ks.SaveFile or "session") .. ".json"
+end
+
+local function SaveKeySession(keyUsed, timerSeconds)
+    local ok = pcall(function()
+        local folder = MacUI.KeySystem.SaveFolder or "MacUI/KeySystem"
+        if makefolder and isfolder and not isfolder(folder) then
+            makefolder(folder)
+        end
+        writefile(KeySessionPath(), HttpService:JSONEncode({
+            key = keyUsed,
+            timer = timerSeconds,
+            timestamp = os.time()
+        }))
+    end)
+    return ok
+end
+
+local function LoadKeySession()
+    local ok, result = pcall(function()
+        local path = KeySessionPath()
+        if isfile and isfile(path) then
+            return HttpService:JSONDecode(readfile(path))
+        end
+        return nil
+    end)
+    if ok then return result end
+    return nil
+end
+
+-- Checks the entered key against the expected one. On success, starts (or restarts) the
+-- re-entry timer by saving a session file, so RunKeySystem/GetKeyStatus can skip the prompt
+-- next time until that timer runs out.
+function MacUI:VerifyKey(input)
+    local expected = self:_ResolveExpectedKey()
+    if not expected or expected == "" then
+        warn("[MacUI] KeySystem: no expected key configured (set KeySystem.Key or GetKeySite)")
+        return false
+    end
+    local trimmedInput = tostring(input or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmedInput == "" then return false end
+    if trimmedInput:lower() ~= tostring(expected):lower() then
+        return false
+    end
+    local timerSeconds = self:_ResolveTimerSeconds()
+    SaveKeySession(trimmedInput, timerSeconds)
+    return true
+end
+
+-- Returns {Valid, Remaining, Total}. Valid is true when KeySystem is off (nothing to check),
+-- or when a saved session exists and (Timer == 0, meaning it never expires, or there's still
+-- time left on it). Remaining/Total are nil when there's no timer to show.
+function MacUI:GetKeyStatus()
+    if not self.KeySystem.Enabled then
+        return {Valid = true}
+    end
+    local session = LoadKeySession()
+    if not session or not session.timestamp then
+        return {Valid = false}
+    end
+    local total = session.timer or 0
+    if total <= 0 then
+        return {Valid = true}
+    end
+    local elapsed = os.time() - session.timestamp
+    local remaining = math.max(total - elapsed, 0)
+    return {Valid = remaining > 0, Remaining = remaining, Total = total}
+end
+
+-- Builds the key-entry modal. onSuccess/onFail are the "remade" callback pair: onSuccess()
+-- fires once a correct key is entered (and the modal closes itself); onFail(reason) fires on
+-- every rejected attempt (reason is a short string) and does NOT close the modal, so the
+-- person can just try again.
+function MacUI:PromptKeySystem(onSuccess, onFail)
+    local ks = self.KeySystem
+    local theme = self.Themes[self.CurrentTheme] or self.Themes["Liquid Glass Dark"]
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MacUI_KeySystem"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 100001
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = GetUIParent()
+
+    local dim = Instance.new("Frame")
+    dim.Size = UDim2.new(1, 0, 1, 0)
+    dim.BackgroundColor3 = Color3.new(0, 0, 0)
+    dim.BackgroundTransparency = 0.45
+    dim.Active = true -- blocks clicks to anything behind the modal
+    dim.Parent = screenGui
+
+    local panel = CreateGlassFrame(screenGui, {Radius = 18, Transparency = 0.1, Color = theme.Background})
+    panel.Size = UDim2.new(0, 340, 0, 220)
+    panel.Position = UDim2.new(0.5, -170, 0.5, -110)
+    local base = GetGlassBase(panel)
+    base.ClipsDescendants = true
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -32, 0, 26)
+    titleLbl.Position = UDim2.new(0, 16, 0, 18)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = ks.Title or "Key System"
+    titleLbl.TextColor3 = theme.Text
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 18
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Parent = base
+
+    local noteLbl = Instance.new("TextLabel")
+    noteLbl.Size = UDim2.new(1, -32, 0, 36)
+    noteLbl.Position = UDim2.new(0, 16, 0, 46)
+    noteLbl.BackgroundTransparency = 1
+    noteLbl.Text = ks.Note or "Enter your key to continue"
+    noteLbl.TextColor3 = theme.SecondaryText
+    noteLbl.Font = Enum.Font.Gotham
+    noteLbl.TextSize = 13
+    noteLbl.TextWrapped = true
+    noteLbl.TextXAlignment = Enum.TextXAlignment.Left
+    noteLbl.Parent = base
+
+    local inputContainer = CreateGlassFrame(base, {Radius = 8, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false})
+    inputContainer.Size = UDim2.new(1, -32, 0, 36)
+    inputContainer.Position = UDim2.new(0, 16, 0, 92)
+    local inputBase = GetGlassBase(inputContainer)
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -16, 1, 0)
+    box.Position = UDim2.new(0, 8, 0, 0)
+    box.BackgroundTransparency = 1
+    box.Text = ""
+    box.PlaceholderText = "Key..."
+    box.TextColor3 = theme.Text
+    box.PlaceholderColor3 = theme.SecondaryText
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 14
+    box.ClearTextOnFocus = false
+    box.Parent = inputBase
+
+    local statusLbl = Instance.new("TextLabel")
+    statusLbl.Size = UDim2.new(1, -32, 0, 18)
+    statusLbl.Position = UDim2.new(0, 16, 0, 132)
+    statusLbl.BackgroundTransparency = 1
+    statusLbl.Text = ""
+    statusLbl.TextColor3 = theme.Danger
+    statusLbl.Font = Enum.Font.Gotham
+    statusLbl.TextSize = 12
+    statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    statusLbl.Parent = base
+
+    local submitContainer = CreateGlassFrame(base, {Radius = 8, Transparency = 0.1, Color = theme.Accent, Layers = false})
+    submitContainer.Size = UDim2.new(1, -32, 0, 38)
+    submitContainer.Position = UDim2.new(0, 16, 1, -54)
+    local submitBase = GetGlassBase(submitContainer)
+    local submitBtn = Instance.new("TextButton")
+    submitBtn.Size = UDim2.new(1, 0, 1, 0)
+    submitBtn.BackgroundTransparency = 1
+    submitBtn.Text = "Submit"
+    submitBtn.TextColor3 = Color3.new(1, 1, 1)
+    submitBtn.Font = Enum.Font.GothamMedium
+    submitBtn.TextSize = 14
+    submitBtn.Parent = submitBase
+
+    if ks.KeyLink then
+        submitContainer.Size = UDim2.new(0.62, -20, 0, 38)
+        local linkContainer = CreateGlassFrame(base, {Radius = 8, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false})
+        linkContainer.Size = UDim2.new(0.38, 0, 0, 38)
+        linkContainer.Position = UDim2.new(0.62, 16, 1, -54)
+        local linkBase = GetGlassBase(linkContainer)
+        local linkBtn = Instance.new("TextButton")
+        linkBtn.Size = UDim2.new(1, 0, 1, 0)
+        linkBtn.BackgroundTransparency = 1
+        linkBtn.Text = "Copy Link"
+        linkBtn.TextColor3 = theme.Text
+        linkBtn.Font = Enum.Font.Gotham
+        linkBtn.TextSize = 13
+        linkBtn.Parent = linkBase
+        linkBtn.MouseButton1Click:Connect(function()
+            local ok = pcall(function() setclipboard(ks.KeyLink) end)
+            statusLbl.TextColor3 = theme.Success
+            statusLbl.Text = ok and "Key link copied to clipboard." or "Couldn't copy - link: " .. ks.KeyLink
+        end)
+    end
+
+    local function Submit()
+        local ok = self:VerifyKey(box.Text)
+        if ok then
+            statusLbl.TextColor3 = theme.Success
+            statusLbl.Text = "Key accepted."
+            task.delay(0.25, function()
+                MacUI.Tween(panel, {Time = 0.25}, {Size = UDim2.new(0, 0, 0, 0)})
+                task.delay(0.25, function() screenGui:Destroy() end)
+            end)
+            if onSuccess then
+                local callOk, err = pcall(onSuccess)
+                if not callOk then warn("[MacUI] KeySystem OnSuccess error:", err) end
+            end
+        else
+            statusLbl.TextColor3 = theme.Danger
+            statusLbl.Text = "Invalid key - try again."
+            MacUI.Shake(inputContainer, 6, 0.3)
+            if onFail then
+                local callOk, err = pcall(onFail, "invalid_key")
+                if not callOk then warn("[MacUI] KeySystem OnFail error:", err) end
+            end
+        end
+    end
+
+    submitBtn.MouseButton1Click:Connect(Submit)
+    box.FocusLost:Connect(function(enterPressed)
+        if enterPressed then Submit() end
+    end)
+
+    MacUI.PopIn(panel, 0)
+end
+
+-- The entry point: call this instead of (or before) CreateWindow when a key system is
+-- configured. If KeySystem.Enabled is false, or a still-valid session already exists, it
+-- calls onReady() immediately with no prompt. Otherwise it shows PromptKeySystem and calls
+-- onReady() only once a correct key is entered.
+function MacUI:RunKeySystem(onReady, onFail)
+    local status = self:GetKeyStatus()
+    if status.Valid then
+        if onReady then onReady() end
+        return
+    end
+    self:PromptKeySystem(onReady, onFail)
 end
 
 return MacUI
