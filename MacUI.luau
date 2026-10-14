@@ -1,11 +1,11 @@
 --[[
-    MacUI v2.0.0
+    MacUI v2.1.0
     A modern macOS-inspired Roblox UI library
-    Liquid Glass + Dock + Boot Sequence + Lucide Icons + Rich Animations
+    3-Layer Liquid Glass + Metaball Dock Indicators + Fixed Dropdown + Lucide Icons + Rich Animations
 ]]
 
 local MacUI = {
-    Version = "2.0.0",
+    Version = "2.1.0",
     Themes = {},
     CurrentTheme = "Dark",
     Windows = {},
@@ -587,6 +587,12 @@ end
 -- ============================================================
 -- LIQUID GLASS FRAME (multi-layer approximation)
 -- ============================================================
+-- ============================================================
+-- 3-LAYER LIQUID GLASS FRAME
+-- Layer 1 (Base)     : tinted translucent fill
+-- Layer 2 (Frost)    : diffusion / depth overlay
+-- Layer 3 (Specular) : top sheen + soft edge highlight + optional metaball soft glow
+-- ============================================================
 local function CreateGlassFrame(parent, props)
     props = props or {}
     local theme = MacUI.Themes[MacUI.CurrentTheme] or MacUI.Themes["Liquid Glass Dark"]
@@ -595,6 +601,9 @@ local function CreateGlassFrame(parent, props)
         or theme.GlassTransparency
         or MacUI.GlassStyle.Transparency
     local color = props.Color or theme.Glass or theme.Background
+    local useLayers = props.Layers
+    if useLayers == nil then useLayers = MacUI.GlassStyle.Layers end
+    local useMetaball = props.Metaball == true -- soft organic edge glow (approximate)
 
     local container = Instance.new("Frame")
     container.BackgroundTransparency = 1
@@ -602,23 +611,23 @@ local function CreateGlassFrame(parent, props)
     container.ClipsDescendants = false
     container.Parent = parent
 
-    -- Shadow layer
+    -- Soft drop shadow
     if MacUI.GlassStyle.Shadow then
         local shadow = Instance.new("ImageLabel")
         shadow.Name = "GlassShadow"
         shadow.BackgroundTransparency = 1
         shadow.Image = MacUI.GlassStyle.ShadowImage or "rbxassetid://6014261993"
         shadow.ImageColor3 = Color3.new(0, 0, 0)
-        shadow.ImageTransparency = 0.55
+        shadow.ImageTransparency = 0.52
         shadow.ScaleType = Enum.ScaleType.Slice
         shadow.SliceCenter = Rect.new(49, 49, 450, 450)
-        shadow.Size = UDim2.new(1, 48, 1, 48)
-        shadow.Position = UDim2.new(0, -24, 0, -20)
+        shadow.Size = UDim2.new(1, 52, 1, 52)
+        shadow.Position = UDim2.new(0, -26, 0, -22)
         shadow.ZIndex = -2
         shadow.Parent = container
     end
 
-    -- Base glass
+    -- ========== LAYER 1: Base glass fill ==========
     local base = Instance.new("Frame")
     base.Name = "GlassBase"
     base.Size = UDim2.new(1, 0, 1, 0)
@@ -628,22 +637,18 @@ local function CreateGlassFrame(parent, props)
     base.ZIndex = 1
     base.Parent = container
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, radius)
-    corner.Parent = base
+    local baseCorner = Instance.new("UICorner")
+    baseCorner.Name = "GlassCorner"
+    baseCorner.CornerRadius = UDim.new(0, radius)
+    baseCorner.Parent = base
 
-    -- Frost / tint overlay. props.Layers lets a specific call opt out of the Frost/Sheen
-    -- overlays (e.g. content that needs AutomaticSize - Frost/Sheen are Scale-sized to the
-    -- base, so letting the base auto-size off its own children while they're present would
-    -- make its size depend on itself).
-    local useLayers = props.Layers
-    if useLayers == nil then useLayers = MacUI.GlassStyle.Layers end
     if useLayers then
+        -- ========== LAYER 2: Frost / diffusion ==========
         local frost = Instance.new("Frame")
         frost.Name = "Frost"
         frost.Size = UDim2.new(1, 0, 1, 0)
-        frost.BackgroundColor3 = theme.Glass
-        frost.BackgroundTransparency = 0.82
+        frost.BackgroundColor3 = theme.Glass or color
+        frost.BackgroundTransparency = 0.78
         frost.BorderSizePixel = 0
         frost.ZIndex = 2
         frost.Parent = base
@@ -652,12 +657,22 @@ local function CreateGlassFrame(parent, props)
         frostCorner.CornerRadius = UDim.new(0, radius)
         frostCorner.Parent = frost
 
-        -- Subtle top highlight (liquid glass sheen)
+        -- Subtle vertical depth gradient on frost
+        local frostGrad = Instance.new("UIGradient")
+        frostGrad.Rotation = 90
+        frostGrad.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.15),
+            NumberSequenceKeypoint.new(0.45, 0.55),
+            NumberSequenceKeypoint.new(1, 0.25)
+        })
+        frostGrad.Parent = frost
+
+        -- ========== LAYER 3: Specular sheen + edge highlight ==========
         local sheen = Instance.new("Frame")
         sheen.Name = "Sheen"
-        sheen.Size = UDim2.new(1, 0, 0.42, 0)
+        sheen.Size = UDim2.new(1, 0, 0.48, 0)
         sheen.BackgroundColor3 = theme.Sheen or Color3.new(1, 1, 1)
-        sheen.BackgroundTransparency = 0.88
+        sheen.BackgroundTransparency = 0.86
         sheen.BorderSizePixel = 0
         sheen.ZIndex = 3
         sheen.Parent = base
@@ -669,19 +684,58 @@ local function CreateGlassFrame(parent, props)
         local sheenGradient = Instance.new("UIGradient")
         sheenGradient.Rotation = 90
         sheenGradient.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.55),
-            NumberSequenceKeypoint.new(0.6, 0.9),
+            NumberSequenceKeypoint.new(0, 0.35),
+            NumberSequenceKeypoint.new(0.35, 0.72),
+            NumberSequenceKeypoint.new(0.7, 0.95),
             NumberSequenceKeypoint.new(1, 1)
         })
         sheenGradient.Parent = sheen
+
+        -- Soft inner edge highlight (liquid glass rim light)
+        local rim = Instance.new("Frame")
+        rim.Name = "RimLight"
+        rim.Size = UDim2.new(1, -2, 1, -2)
+        rim.Position = UDim2.new(0, 1, 0, 1)
+        rim.BackgroundTransparency = 1
+        rim.BorderSizePixel = 0
+        rim.ZIndex = 4
+        rim.Parent = base
+
+        local rimCorner = Instance.new("UICorner")
+        rimCorner.CornerRadius = UDim.new(0, math.max(0, radius - 1))
+        rimCorner.Parent = rim
+
+        local rimStroke = Instance.new("UIStroke")
+        rimStroke.Name = "RimStroke"
+        rimStroke.Color = theme.Sheen or Color3.fromRGB(255, 255, 255)
+        rimStroke.Transparency = 0.82
+        rimStroke.Thickness = 1.2
+        rimStroke.Parent = rim
+
+        -- Optional metaball soft glow (organic edge bloom)
+        if useMetaball then
+            local glow = Instance.new("Frame")
+            glow.Name = "MetaballGlow"
+            glow.Size = UDim2.new(1, 10, 1, 10)
+            glow.Position = UDim2.new(0, -5, 0, -5)
+            glow.BackgroundColor3 = theme.Accent or Color3.fromRGB(10, 132, 255)
+            glow.BackgroundTransparency = 0.88
+            glow.BorderSizePixel = 0
+            glow.ZIndex = 0
+            glow.Parent = container
+
+            local glowCorner = Instance.new("UICorner")
+            glowCorner.CornerRadius = UDim.new(0, radius + 6)
+            glowCorner.Parent = glow
+        end
     end
 
-    -- Border stroke (soft white edge like macOS liquid glass)
+    -- Outer border stroke (soft white edge)
     if MacUI.GlassStyle.Border then
         local stroke = Instance.new("UIStroke")
         stroke.Name = "GlassStroke"
         stroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
-        stroke.Transparency = theme.BorderTransparency or 0.7
+        stroke.Transparency = theme.BorderTransparency or 0.68
         stroke.Thickness = 1
         stroke.Parent = base
     end
@@ -1283,7 +1337,11 @@ function MacUI:CreateWindow(options)
                     end
                 end
                 if indicator then
-                    indicator.BackgroundColor3 = t.Accent
+                    for _, blob in ipairs(indicator:GetChildren()) do
+                        if blob:IsA("Frame") then
+                            blob.BackgroundColor3 = t.Accent
+                        end
+                    end
                 end
             end
         end
@@ -1509,7 +1567,11 @@ function MacUI:CreateWindow(options)
                         })
                     end
                     if indicator then
-                        MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 1})
+                        for _, blob in ipairs(indicator:GetChildren()) do
+                            if blob:IsA("Frame") then
+                                MacUI.Tween(blob, {Time = 0.22}, {BackgroundTransparency = 1})
+                            end
+                        end
                     end
                 end
             end
@@ -1543,7 +1605,19 @@ function MacUI:CreateWindow(options)
                     MacUI.Bounce(icon, 14, 0.42)
                 end
                 if indicator then
-                    MacUI.Tween(indicator, {Time = 0.2}, {BackgroundTransparency = 0})
+                    -- Metaball blobs fade in with slight stagger for organic feel
+                    local blobs = {"Blob1", "Blob2", "Blob3"}
+                    for i, name in ipairs(blobs) do
+                        local blob = indicator:FindFirstChild(name)
+                        if blob then
+                            blob.BackgroundColor3 = theme.Accent
+                            task.delay((i - 1) * 0.04, function()
+                                MacUI.Tween(blob, {Time = 0.28, EasingStyle = Enum.EasingStyle.Back}, {
+                                    BackgroundTransparency = (i == 1) and 0.15 or 0.45
+                                })
+                            end)
+                        end
+                    end
                 end
             end
         end
@@ -1572,18 +1646,50 @@ function MacUI:CreateWindow(options)
             icon.ZIndex = 22
             icon.Parent = dockBtn
 
+            -- Metaball-style soft active indicator (overlapping soft circles for organic look)
             local indicator = Instance.new("Frame")
             indicator.Name = "Indicator"
-            indicator.Size = UDim2.new(0, 5, 0, 5)
-            indicator.Position = UDim2.new(0.5, -2.5, 1, -6)
-            indicator.BackgroundColor3 = theme.Accent
+            indicator.Size = UDim2.new(0, 18, 0, 8)
+            indicator.Position = UDim2.new(0.5, -9, 1, -7)
             indicator.BackgroundTransparency = 1
             indicator.ZIndex = 22
             indicator.Parent = dockBtn
 
-            local indCorner = Instance.new("UICorner")
-            indCorner.CornerRadius = UDim.new(1, 0)
-            indCorner.Parent = indicator
+            local blob1 = Instance.new("Frame")
+            blob1.Name = "Blob1"
+            blob1.Size = UDim2.new(0, 10, 0, 6)
+            blob1.Position = UDim2.new(0.5, -5, 0.5, -3)
+            blob1.BackgroundColor3 = theme.Accent
+            blob1.BackgroundTransparency = 1
+            blob1.ZIndex = 23
+            blob1.Parent = indicator
+            local b1c = Instance.new("UICorner")
+            b1c.CornerRadius = UDim.new(1, 0)
+            b1c.Parent = blob1
+
+            local blob2 = Instance.new("Frame")
+            blob2.Name = "Blob2"
+            blob2.Size = UDim2.new(0, 7, 0, 5)
+            blob2.Position = UDim2.new(0, 1, 0.5, -2.5)
+            blob2.BackgroundColor3 = theme.Accent
+            blob2.BackgroundTransparency = 1
+            blob2.ZIndex = 22
+            blob2.Parent = indicator
+            local b2c = Instance.new("UICorner")
+            b2c.CornerRadius = UDim.new(1, 0)
+            b2c.Parent = blob2
+
+            local blob3 = Instance.new("Frame")
+            blob3.Name = "Blob3"
+            blob3.Size = UDim2.new(0, 7, 0, 5)
+            blob3.Position = UDim2.new(1, -8, 0.5, -2.5)
+            blob3.BackgroundColor3 = theme.Accent
+            blob3.BackgroundTransparency = 1
+            blob3.ZIndex = 22
+            blob3.Parent = indicator
+            local b3c = Instance.new("UICorner")
+            b3c.CornerRadius = UDim.new(1, 0)
+            b3c.Parent = blob3
 
             -- Hover magnification (classic dock feel)
             TrackConnection(dockBtn.MouseEnter:Connect(function()
@@ -1903,7 +2009,7 @@ function MacUI:CreateWindow(options)
                 return {Set = Update, Get = function() return current end}
             end
 
-            -- Dropdown
+            -- Dropdown (fixed: proper glass corners, overlay parenting, outside-click close, smooth open)
             function Section:CreateDropdown(opts)
                 opts = opts or {}
                 local flag = opts.Flag or opts.Name
@@ -1931,82 +2037,182 @@ function MacUI:CreateWindow(options)
                 lbl.TextXAlignment = Enum.TextXAlignment.Left
                 lbl.Parent = row
 
+                -- Trigger button with consistent corner + glass feel
                 local dropBtn = Instance.new("TextButton")
                 dropBtn.Size = UDim2.new(0.5, 0, 0, 30)
                 dropBtn.Position = UDim2.new(0.45, 0, 0.5, -15)
                 dropBtn.BackgroundColor3 = theme.TertiaryBackground
-                dropBtn.BackgroundTransparency = 0.3
-                dropBtn.Text = current or ""
+                dropBtn.BackgroundTransparency = 0.25
+                dropBtn.Text = "  " .. (current or "")
                 dropBtn.TextColor3 = theme.Text
                 dropBtn.Font = Enum.Font.Gotham
                 dropBtn.TextSize = 13
+                dropBtn.TextXAlignment = Enum.TextXAlignment.Left
                 dropBtn.AutoButtonColor = false
+                dropBtn.ClipsDescendants = true
                 dropBtn.Parent = row
 
                 local dropCorner = Instance.new("UICorner")
                 dropCorner.CornerRadius = UDim.new(0, 8)
                 dropCorner.Parent = dropBtn
 
+                local dropStroke = Instance.new("UIStroke")
+                dropStroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
+                dropStroke.Transparency = 0.75
+                dropStroke.Thickness = 1
+                dropStroke.Parent = dropBtn
+
+                -- Chevron
+                local chevron = Instance.new("ImageLabel")
+                chevron.Name = "Chevron"
+                chevron.Size = UDim2.new(0, 14, 0, 14)
+                chevron.Position = UDim2.new(1, -22, 0.5, -7)
+                chevron.BackgroundTransparency = 1
+                chevron.Image = "rbxassetid://6031091004" -- simple down arrow fallback
+                chevron.ImageColor3 = theme.SecondaryText
+                chevron.Rotation = 0
+                chevron.ZIndex = 2
+                chevron.Parent = dropBtn
+                -- Prefer Lucide if available
+                pcall(function() MacUI.ApplyIcon(chevron, "chevron-down") end)
+
                 local open = false
                 local listFrame
+                local outsideConn
+
+                local function CloseList()
+                    if listFrame then
+                        local lf = listFrame
+                        listFrame = nil
+                        open = false
+                        if outsideConn then
+                            outsideConn:Disconnect()
+                            outsideConn = nil
+                        end
+                        MacUI.Tween(chevron, {Time = 0.18}, {Rotation = 0})
+                        MacUI.Tween(lf, {Time = 0.18, EasingStyle = Enum.EasingStyle.Quint}, {
+                            Size = UDim2.new(lf.Size.X.Scale, lf.Size.X.Offset, 0, 0)
+                        })
+                        task.delay(0.2, function()
+                            if lf and lf.Parent then lf:Destroy() end
+                        end)
+                    end
+                end
 
                 local function SelectOption(opt, silent)
                     current = opt
-                    dropBtn.Text = opt
+                    dropBtn.Text = "  " .. tostring(opt)
                     if not silent and opts.Callback then
                         local ok, err = pcall(opts.Callback, opt)
                         if not ok then warn("[MacUI] Callback error:", err) end
                     end
                     if flag then MacUI.Config.Data[flag] = opt end
+                    CloseList()
                 end
 
                 TrackConnection(dropBtn.MouseButton1Click:Connect(function()
-                    open = not open
                     if open then
-                        listFrame = CreateGlassFrame(row, {Radius = 8, Transparency = 0.08, Color = theme.SecondaryBackground})
-                        listFrame.Size = UDim2.new(0.5, 0, 0, math.min(#options, 6) * 30)
-                        listFrame.Position = UDim2.new(0.45, 0, 1, 4)
-                        listFrame.ZIndex = 50
-                        local listBase = GetGlassBase(listFrame)
-                        listBase.ClipsDescendants = true
-
-                        local listScroll = Instance.new("ScrollingFrame")
-                        listScroll.Size = UDim2.new(1, 0, 1, 0)
-                        listScroll.BackgroundTransparency = 1
-                        listScroll.BorderSizePixel = 0
-                        listScroll.ScrollBarThickness = 3
-                        listScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 30)
-                        listScroll.ZIndex = 51
-                        listScroll.Parent = listBase
-
-                        for i, opt in ipairs(options) do
-                            local item = Instance.new("TextButton")
-                            item.Size = UDim2.new(1, 0, 0, 30)
-                            item.Position = UDim2.new(0, 0, 0, (i-1)*30)
-                            item.BackgroundTransparency = (opt == current) and 0.85 or 1
-                            item.BackgroundColor3 = theme.Accent
-                            item.Text = opt
-                            item.TextColor3 = theme.Text
-                            item.Font = Enum.Font.Gotham
-                            item.TextSize = 13
-                            item.AutoButtonColor = false
-                            item.ZIndex = 52
-                            item.Parent = listScroll
-                            TrackConnection(item.MouseEnter:Connect(function()
-                                MacUI.Tween(item, {Time = 0.1}, {BackgroundTransparency = 0.78})
-                            end))
-                            TrackConnection(item.MouseLeave:Connect(function()
-                                MacUI.Tween(item, {Time = 0.1}, {BackgroundTransparency = (opt == current) and 0.85 or 1})
-                            end))
-                            TrackConnection(item.MouseButton1Click:Connect(function()
-                                SelectOption(opt)
-                                if listFrame then listFrame:Destroy() end
-                                open = false
-                            end))
-                        end
-                    else
-                        if listFrame then listFrame:Destroy() end
+                        CloseList()
+                        return
                     end
+                    open = true
+                    MacUI.Tween(chevron, {Time = 0.18}, {Rotation = 180})
+
+                    -- Parent to the window glass base so the list is never clipped by scroll/section
+                    local host = Window.GlassBase or row
+                    local itemH = 32
+                    local maxVisible = math.min(#options, 7)
+                    local listH = maxVisible * itemH + 8
+
+                    listFrame = CreateGlassFrame(host, {
+                        Radius = 10,
+                        Transparency = 0.06,
+                        Color = theme.SecondaryBackground,
+                        Layers = true
+                    })
+                    listFrame.Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, 0)
+                    listFrame.Position = UDim2.new(0, dropBtn.AbsolutePosition.X - host.AbsolutePosition.X, 0, dropBtn.AbsolutePosition.Y - host.AbsolutePosition.Y + dropBtn.AbsoluteSize.Y + 6)
+                    listFrame.ZIndex = 80
+                    listFrame.ClipsDescendants = true
+
+                    local listBase = GetGlassBase(listFrame)
+                    if listBase then
+                        listBase.ClipsDescendants = true
+                    end
+
+                    local listScroll = Instance.new("ScrollingFrame")
+                    listScroll.Size = UDim2.new(1, 0, 1, 0)
+                    listScroll.BackgroundTransparency = 1
+                    listScroll.BorderSizePixel = 0
+                    listScroll.ScrollBarThickness = 4
+                    listScroll.ScrollBarImageColor3 = theme.Border
+                    listScroll.CanvasSize = UDim2.new(0, 0, 0, #options * itemH)
+                    listScroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+                    listScroll.ZIndex = 81
+                    listScroll.Parent = listBase or listFrame
+
+                    local pad = Instance.new("UIPadding")
+                    pad.PaddingTop = UDim.new(0, 4)
+                    pad.PaddingBottom = UDim.new(0, 4)
+                    pad.Parent = listScroll
+
+                    for i, opt in ipairs(options) do
+                        local item = Instance.new("TextButton")
+                        item.Size = UDim2.new(1, -8, 0, itemH - 2)
+                        item.Position = UDim2.new(0, 4, 0, 4 + (i - 1) * itemH)
+                        item.BackgroundTransparency = (opt == current) and 0.75 or 1
+                        item.BackgroundColor3 = theme.Accent
+                        item.Text = "  " .. tostring(opt)
+                        item.TextColor3 = theme.Text
+                        item.Font = Enum.Font.Gotham
+                        item.TextSize = 13
+                        item.TextXAlignment = Enum.TextXAlignment.Left
+                        item.AutoButtonColor = false
+                        item.ZIndex = 82
+                        item.Parent = listScroll
+
+                        local itemCorner = Instance.new("UICorner")
+                        itemCorner.CornerRadius = UDim.new(0, 6)
+                        itemCorner.Parent = item
+
+                        TrackConnection(item.MouseEnter:Connect(function()
+                            MacUI.Tween(item, {Time = 0.12}, {BackgroundTransparency = 0.7})
+                        end))
+                        TrackConnection(item.MouseLeave:Connect(function()
+                            MacUI.Tween(item, {Time = 0.12}, {
+                                BackgroundTransparency = (opt == current) and 0.75 or 1
+                            })
+                        end))
+                        TrackConnection(item.MouseButton1Click:Connect(function()
+                            SelectOption(opt)
+                        end))
+                    end
+
+                    -- Animate open
+                    MacUI.Tween(listFrame, {Time = 0.22, EasingStyle = Enum.EasingStyle.Quint}, {
+                        Size = UDim2.new(0, dropBtn.AbsoluteSize.X, 0, listH)
+                    })
+
+                    -- Close when clicking outside
+                    task.defer(function()
+                        outsideConn = UserInputService.InputBegan:Connect(function(input)
+                            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+                                return
+                            end
+                            if not listFrame or not listFrame.Parent then return end
+                            local pos = input.Position
+                            local abs = listFrame.AbsolutePosition
+                            local size = listFrame.AbsoluteSize
+                            local insideList = pos.X >= abs.X and pos.X <= abs.X + size.X and pos.Y >= abs.Y and pos.Y <= abs.Y + size.Y
+                            local btnAbs = dropBtn.AbsolutePosition
+                            local btnSize = dropBtn.AbsoluteSize
+                            local insideBtn = pos.X >= btnAbs.X and pos.X <= btnAbs.X + btnSize.X and pos.Y >= btnAbs.Y and pos.Y <= btnAbs.Y + btnSize.Y
+                            if not insideList and not insideBtn then
+                                CloseList()
+                            end
+                        end)
+                        TrackConnection(outsideConn)
+                    end)
                 end))
 
                 if hasSaved and opts.Callback then
