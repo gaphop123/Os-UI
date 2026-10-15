@@ -1,6 +1,6 @@
 # Os-UI (WinUI & MacUI)
 
-A collection of lightweight, feature-rich Roblox UI libraries inspired by Windows 10 and macOS Big Sur / Sequoia design systems.
+A collection of lightweight, feature-rich Roblox UI libraries inspired by Windows 10 and macOS design systems.
 
 ---
 
@@ -10,15 +10,25 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.0.0)
+-- macOS Style (v2.1.0) — Golden Gate UI + Liquid Glass + SFX
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.0.0)
+## 🍎 MacUI (v2.1.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, and a full **Key System**.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+
+### Changelog (v2.1.0)
+
+- **Golden Gate UI** — new default theme (warm SF fog + bridge gold)
+- **7 new themes**: Golden Gate, Crimson, Ocean, Lavender, Monochrome, Sunset, Arctic
+- **macOS battery indicator** — percentage + outline body + tip nub + color stages (green → orange → red)
+- **Shared key sessions** — changing hub Name / KeySystem.Title / Note does **not** invalidate a valid session; retyping the same key only refreshes the timer
+- **SFX system** — click, hover, toggle, success, error, notify, boot, dock, open/close sounds
+- SFX Volume slider in Settings; `MacUI:SetSFXVolume(0–1)` or `MacUI.SFXVolume = 0` to mute
+- Sounds respect **Reduce Motion** (muted when enabled)
 
 ### Changelog highlights (v2.0.0)
 
@@ -54,15 +64,15 @@ MacUI:SetupKeySystem({
     Timer = 3600,                                       -- seconds the key stays valid (0 = never expires)
     GetTimeSite = nil,                                  -- e.g. "https://yoursite.com/time.txt"
     GetTimeFromSite = false,                            -- fetch timer length from GetTimeSite
-    Title = "My Hub",
+    Title = "My Hub",                                   -- can differ per hub; does not break sessions
     Note = "Join the Discord below to get a key"
 })
 
 MacUI:RunKeySystem(function()
     local Window = MacUI:CreateWindow({
         Name = "Admin Panel",
-        Subtitle = "v2.0",
-        Theme = "Liquid Glass Dark",
+        Subtitle = "v2.1",
+        Theme = "Golden Gate",      -- default; or "Liquid Glass Dark", "Nord", etc.
         Boot = true,                -- Apple boot animation
         Dock = true,                -- bottom tab dock
         Acrylic = true,             -- glassmorphism
@@ -106,7 +116,7 @@ MacUI:RunKeySystem(function()
         end
     })
 
-    -- Ready-made Settings tab (theme switcher, reduce-motion, Save/Reload/Reset Config)
+    -- Ready-made Settings tab (theme switcher, reduce-motion, SFX volume, Save/Reload/Reset Config)
     Window:CreateSettingsTab()
 end, function(reason)
     print("Key rejected:", reason)
@@ -121,7 +131,7 @@ end)
 |------------------------|----------|--------------------------|-------|
 | `Name`                 | string   | `"MacUI"`                | Main window header text |
 | `Subtitle`             | string   | `""`                     | Secondary header text |
-| `Theme`                | string   | `"Liquid Glass Dark"`    | Preset palette (see Themes) |
+| `Theme`                | string   | `"Golden Gate"`          | Preset palette (see Themes) |
 | `Boot`                 | boolean  | `true`                   | Startup sequence; window stays hidden until finished |
 | `Dock`                 | boolean  | `true`                   | Dock-style navigation bar |
 | `Acrylic`              | boolean  | `true`                   | Background translucency |
@@ -146,21 +156,29 @@ end)
 
 Built-in:
 
-| Name                    | Alias   |
-|-------------------------|---------|
-| `Liquid Glass Dark`     | `Dark`  |
-| `Liquid Glass Light`    | `Light` |
-| `Graphite`              |         |
-| `Midnight`              |         |
-| `Blue`                  |         |
-| `Purple`                |         |
-| `Nord`                  |         |
-| `Solarized`             |         |
-| `Rose Pine`             |         |
-| `Forest`                |         |
-| `Classic Aqua`          |         |
+| Name                    | Alias   | Notes |
+|-------------------------|---------|-------|
+| `Golden Gate`           |         | **Default** — warm SF fog + bridge gold |
+| `Liquid Glass Dark`     | `Dark`  | Classic Sequoia dark glass |
+| `Liquid Glass Light`    | `Light` | Classic Sequoia light glass |
+| `Graphite`              |         | Neutral grey |
+| `Midnight`              |         | Deep purple-black |
+| `Blue`                  |         | Cool blue |
+| `Purple`                |         | Vivid purple |
+| `Nord`                  |         | Nord palette |
+| `Solarized`             |         | Solarized dark |
+| `Rose Pine`             |         | Rose Pine |
+| `Forest`                |         | Green nature |
+| `Classic Aqua`          |         | Classic macOS Aqua light |
+| `Crimson`               |         | Deep red |
+| `Ocean`                 |         | Cool teal |
+| `Lavender`              |         | Soft purple |
+| `Monochrome`            |         | Black / white |
+| `Sunset`                |         | Orange–coral |
+| `Arctic`                |         | Light icy blue |
 
 ```lua
+MacUI:SetTheme("Golden Gate")
 MacUI:SetTheme("Nord")
 ```
 
@@ -180,7 +198,11 @@ MacUI:RegisterTheme("Dracula", {
     Warning             = Color3.fromRGB(255, 184, 108),
     Danger              = Color3.fromRGB(255, 85, 85),
     Shadow              = Color3.fromRGB(0, 0, 0),
-    Dock                = Color3.fromRGB(40, 42, 54)
+    Dock                = Color3.fromRGB(40, 42, 54),
+    IconColor           = Color3.fromRGB(248, 248, 242),
+    TabInactive         = Color3.fromRGB(150, 150, 160),
+    Sheen               = Color3.fromRGB(255, 255, 255),
+    Widget              = Color3.fromRGB(30, 32, 40)
 })
 
 MacUI:SetTheme("Dracula")
@@ -282,6 +304,36 @@ MacUI:SetAccessibility({ ReducedMotion = true })
 
 ---
 
+### Sound Effects (SFX)
+
+```lua
+-- Master volume (0–1). Default 0.55. Set to 0 to mute everything.
+MacUI:SetSFXVolume(0.7)
+-- or
+MacUI.SFXVolume = 0
+
+-- Play a named sound manually
+MacUI.PlaySound("Click")           -- name, optional pitch, optional volumeMul
+MacUI.PlaySound("Success", 1.1, 0.8)
+
+-- Built-in sound keys
+-- Click, Hover, ToggleOn, ToggleOff, Success, Error,
+-- Notify, Boot, Dock, Open, Close, Tab, Type, Slider
+```
+
+Sounds fire automatically on:
+- Boot complete, notifications
+- Traffic lights (close / minimize / maximize)
+- Dock tab selection (bounce)
+- Buttons (hover + click)
+- Toggles (on / off)
+- Key system accept / reject
+- Window open
+
+Reduce Motion mutes all SFX. Settings tab includes an **SFX Volume** slider.
+
+---
+
 ### Config System (Executors)
 
 ```lua
@@ -321,7 +373,7 @@ Gates a script behind a key before the hub loads.
 | `Timer`           | number  | Seconds the key stays valid after entry (`0` = never expires) |
 | `GetTimeSite`     | string  | URL that returns the timer length in seconds (plain text) |
 | `GetTimeFromSite` | boolean | Use `GetTimeSite` instead of the static `Timer` |
-| `Title`           | string  | Modal title |
+| `Title`           | string  | Modal title (changing this does **not** break sessions) |
 | `Note`            | string  | Helper text under the title |
 
 ```lua
@@ -342,12 +394,19 @@ end)
 4. Wrong key → `onFail("invalid_key")` fires, modal stays open so the user can retry.
 5. When the timer expires the next launch requires the key again.
 
-**Battery badge**
+**Shared sessions across hubs**
+
+- Sessions are stored globally under `MacUI/KeySystem/session.json` by default.
+- Changing the hub **Name**, **KeySystem.Title**, or **Note** has **zero effect** on a valid session.
+- Retyping the **same key** in another hub simply refreshes the timer.
+- Only changing the actual **Key** (or remote `GetKeySite` value) invalidates a previous session.
+
+**macOS battery badge**
 
 - Appears in the title bar **only when** `KeySystem.Enabled == true`.
-- Shows remaining percentage of the current timer.
+- Looks like the real macOS menu-bar battery: percentage text + outline body + tip.
+- Fill drains left → right; color stages: green → orange (≤30%) → red (≤15%).
 - Drain speed is proportional to the timer length (short timer = faster drain).
-- Color changes: green → orange → red as it empties.
 
 Lower-level helpers (if you want a custom flow):
 
@@ -376,7 +435,7 @@ Metaballs = true
 -- Or manually
 MacUI.AddMetaballs(parentFrame, {
     Count  = 3,
-    Color  = Color3.fromRGB(10, 132, 255),
+    Color  = Color3.fromRGB(212, 160, 70),  -- Golden Gate accent
     Size   = {40, 80},
     Speed  = 5,
     ZIndex = 1
@@ -532,81 +591,3 @@ Flags on Toggle / Slider / Dropdown / Input are stored under `window.ConfigValue
 ## 📜 License
 
 MIT License. Free to use, modify, and distribute for any Roblox client project.
-
----
-
----
-
----
-
-
----
-
----
-
-
----
-
-
-
-
-
-
----
-
-
-
----
-
-
-
-
-
-
-
-
----
-
-
-
-
-
-
----
-
-
-
----
----
----
----
-
-
----
----
-
----
----
-
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
-btw i love MacUI than WinUI cuz is look cool
