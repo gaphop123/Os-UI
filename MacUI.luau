@@ -1,13 +1,13 @@
 --[[
-    MacUI v2.0.0
+    MacUI v2.1.0
     A modern macOS-inspired Roblox UI library
-    Liquid Glass + Dock + Boot Sequence + Lucide Icons + Rich Animations
+    Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
 ]]
 
 local MacUI = {
-    Version = "2.0.0",
+    Version = "2.1.0",
     Themes = {},
-    CurrentTheme = "Dark",
+    CurrentTheme = "Golden Gate",
     Windows = {},
     Notifications = {},
     Config = {
@@ -27,7 +27,9 @@ local MacUI = {
         ShadowImage = "rbxassetid://6014261993", -- override if this decal doesn't render for you
         Tint = Color3.fromRGB(30, 30, 35),
         Layers = true
-    }
+    },
+    -- Global SFX master volume (0–1). Set to 0 to mute all UI sounds.
+    SFXVolume = 0.55
 }
 
 -- Services
@@ -35,6 +37,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local SoundService = game:GetService("SoundService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -64,6 +67,60 @@ local function DisconnectAll(conns)
         end
     end
     table.clear(conns)
+end
+
+-- ============================================================
+-- SFX SYSTEM (macOS-style UI sounds)
+-- Uses short public Roblox library assets. Volume is gated by
+-- MacUI.SFXVolume and Accessibility.ReducedMotion (muted when true).
+-- ============================================================
+MacUI.Sounds = {
+    Click      = "rbxassetid://6895079853",   -- soft click
+    Hover      = "rbxassetid://9119713951",   -- subtle hover tick
+    ToggleOn   = "rbxassetid://9114076550",   -- pop on
+    ToggleOff  = "rbxassetid://9114076550",   -- pop off (same, pitched later)
+    Success    = "rbxassetid://6026984224",   -- success chime
+    Error      = "rbxassetid://9119713951",   -- error / shake
+    Notify     = "rbxassetid://6895079853",   -- notification slide
+    Boot       = "rbxassetid://6026984224",   -- boot complete
+    Dock       = "rbxassetid://9114076550",   -- dock bounce
+    Open       = "rbxassetid://6895079853",   -- window open
+    Close      = "rbxassetid://9119713951",   -- window close / minimize
+    Tab        = "rbxassetid://6895079853",   -- tab switch
+    Type       = "rbxassetid://9119713951",   -- key type tick
+    Slider     = "rbxassetid://6895079853",   -- slider tick
+}
+
+local function PlaySFX(name, pitch, volumeMul)
+    if MacUI.Accessibility.ReducedMotion then return end
+    local vol = (MacUI.SFXVolume or 0.55) * (volumeMul or 1)
+    if vol <= 0 then return end
+    local id = MacUI.Sounds[name]
+    if not id then return end
+    local ok, sound = pcall(function()
+        local s = Instance.new("Sound")
+        s.SoundId = id
+        s.Volume = math.clamp(vol, 0, 1)
+        s.PlaybackSpeed = pitch or 1
+        s.Parent = SoundService
+        s:Play()
+        s.Ended:Connect(function()
+            if s and s.Parent then s:Destroy() end
+        end)
+        task.delay(3, function()
+            if s and s.Parent then s:Destroy() end
+        end)
+        return s
+    end)
+    return ok and sound or nil
+end
+
+function MacUI.PlaySound(name, pitch, volumeMul)
+    return PlaySFX(name, pitch, volumeMul)
+end
+
+function MacUI:SetSFXVolume(v)
+    self.SFXVolume = math.clamp(tonumber(v) or 0, 0, 1)
 end
 
 -- Spring-like tween helper
@@ -628,7 +685,169 @@ MacUI.Themes["Classic Aqua"] = {
     Widget = Color3.fromRGB(230, 240, 250)
 }
 
-MacUI.CurrentTheme = "Liquid Glass Dark"
+-- Golden Gate — warm SF fog + bridge gold (default macOS Golden Gate UI)
+MacUI.Themes["Golden Gate"] = {
+    Background = Color3.fromRGB(28, 26, 24),
+    SecondaryBackground = Color3.fromRGB(38, 35, 32),
+    TertiaryBackground = Color3.fromRGB(52, 48, 42),
+    Text = Color3.fromRGB(250, 245, 235),
+    SecondaryText = Color3.fromRGB(180, 170, 155),
+    Accent = Color3.fromRGB(212, 160, 70),
+    Border = Color3.fromRGB(255, 240, 210),
+    BorderTransparency = 0.72,
+    Glass = Color3.fromRGB(36, 33, 28),
+    GlassTransparency = 0.30,
+    Success = Color3.fromRGB(90, 200, 120),
+    Warning = Color3.fromRGB(230, 170, 60),
+    Danger = Color3.fromRGB(220, 80, 70),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(32, 30, 26),
+    DockTransparency = 0.26,
+    IconColor = Color3.fromRGB(245, 235, 220),
+    TabInactive = Color3.fromRGB(160, 150, 135),
+    Sheen = Color3.fromRGB(255, 230, 180),
+    Widget = Color3.fromRGB(24, 22, 20)
+}
+
+MacUI.Themes.Crimson = {
+    Background = Color3.fromRGB(28, 16, 18),
+    SecondaryBackground = Color3.fromRGB(40, 22, 26),
+    TertiaryBackground = Color3.fromRGB(55, 30, 36),
+    Text = Color3.fromRGB(255, 240, 242),
+    SecondaryText = Color3.fromRGB(190, 150, 155),
+    Accent = Color3.fromRGB(220, 60, 80),
+    Border = Color3.fromRGB(255, 200, 210),
+    BorderTransparency = 0.78,
+    Glass = Color3.fromRGB(38, 20, 24),
+    GlassTransparency = 0.32,
+    Success = Color3.fromRGB(48, 209, 88),
+    Warning = Color3.fromRGB(255, 159, 10),
+    Danger = Color3.fromRGB(255, 69, 58),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(32, 18, 22),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(250, 230, 235),
+    TabInactive = Color3.fromRGB(170, 130, 140),
+    Sheen = Color3.fromRGB(255, 180, 190),
+    Widget = Color3.fromRGB(22, 12, 14)
+}
+
+MacUI.Themes.Ocean = {
+    Background = Color3.fromRGB(12, 24, 36),
+    SecondaryBackground = Color3.fromRGB(18, 34, 50),
+    TertiaryBackground = Color3.fromRGB(26, 48, 68),
+    Text = Color3.fromRGB(230, 245, 255),
+    SecondaryText = Color3.fromRGB(140, 180, 200),
+    Accent = Color3.fromRGB(0, 180, 220),
+    Border = Color3.fromRGB(180, 230, 255),
+    BorderTransparency = 0.78,
+    Glass = Color3.fromRGB(16, 32, 48),
+    GlassTransparency = 0.30,
+    Success = Color3.fromRGB(48, 209, 88),
+    Warning = Color3.fromRGB(255, 159, 10),
+    Danger = Color3.fromRGB(255, 69, 58),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(14, 28, 42),
+    DockTransparency = 0.26,
+    IconColor = Color3.fromRGB(220, 240, 255),
+    TabInactive = Color3.fromRGB(120, 160, 180),
+    Sheen = Color3.fromRGB(160, 220, 255),
+    Widget = Color3.fromRGB(10, 20, 32)
+}
+
+MacUI.Themes.Lavender = {
+    Background = Color3.fromRGB(30, 26, 42),
+    SecondaryBackground = Color3.fromRGB(42, 36, 58),
+    TertiaryBackground = Color3.fromRGB(56, 48, 74),
+    Text = Color3.fromRGB(245, 240, 255),
+    SecondaryText = Color3.fromRGB(180, 170, 200),
+    Accent = Color3.fromRGB(160, 120, 255),
+    Border = Color3.fromRGB(220, 200, 255),
+    BorderTransparency = 0.76,
+    Glass = Color3.fromRGB(38, 32, 54),
+    GlassTransparency = 0.32,
+    Success = Color3.fromRGB(48, 209, 88),
+    Warning = Color3.fromRGB(255, 159, 10),
+    Danger = Color3.fromRGB(255, 69, 58),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(34, 30, 48),
+    DockTransparency = 0.28,
+    IconColor = Color3.fromRGB(235, 230, 250),
+    TabInactive = Color3.fromRGB(150, 140, 180),
+    Sheen = Color3.fromRGB(200, 180, 255),
+    Widget = Color3.fromRGB(24, 20, 36)
+}
+
+MacUI.Themes.Monochrome = {
+    Background = Color3.fromRGB(18, 18, 18),
+    SecondaryBackground = Color3.fromRGB(28, 28, 28),
+    TertiaryBackground = Color3.fromRGB(42, 42, 42),
+    Text = Color3.fromRGB(250, 250, 250),
+    SecondaryText = Color3.fromRGB(160, 160, 160),
+    Accent = Color3.fromRGB(220, 220, 220),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.82,
+    Glass = Color3.fromRGB(24, 24, 24),
+    GlassTransparency = 0.28,
+    Success = Color3.fromRGB(180, 180, 180),
+    Warning = Color3.fromRGB(200, 200, 200),
+    Danger = Color3.fromRGB(120, 120, 120),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(22, 22, 22),
+    DockTransparency = 0.25,
+    IconColor = Color3.fromRGB(240, 240, 240),
+    TabInactive = Color3.fromRGB(140, 140, 140),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(14, 14, 14)
+}
+
+MacUI.Themes.Sunset = {
+    Background = Color3.fromRGB(32, 20, 28),
+    SecondaryBackground = Color3.fromRGB(48, 28, 36),
+    TertiaryBackground = Color3.fromRGB(64, 38, 48),
+    Text = Color3.fromRGB(255, 240, 230),
+    SecondaryText = Color3.fromRGB(200, 160, 150),
+    Accent = Color3.fromRGB(255, 120, 80),
+    Border = Color3.fromRGB(255, 200, 180),
+    BorderTransparency = 0.75,
+    Glass = Color3.fromRGB(42, 26, 34),
+    GlassTransparency = 0.30,
+    Success = Color3.fromRGB(100, 200, 120),
+    Warning = Color3.fromRGB(255, 180, 60),
+    Danger = Color3.fromRGB(240, 70, 80),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(36, 22, 30),
+    DockTransparency = 0.26,
+    IconColor = Color3.fromRGB(255, 235, 220),
+    TabInactive = Color3.fromRGB(180, 140, 130),
+    Sheen = Color3.fromRGB(255, 200, 160),
+    Widget = Color3.fromRGB(26, 16, 22)
+}
+
+MacUI.Themes.Arctic = {
+    Background = Color3.fromRGB(230, 238, 245),
+    SecondaryBackground = Color3.fromRGB(245, 250, 255),
+    TertiaryBackground = Color3.fromRGB(210, 222, 235),
+    Text = Color3.fromRGB(20, 30, 45),
+    SecondaryText = Color3.fromRGB(80, 100, 120),
+    Accent = Color3.fromRGB(0, 140, 200),
+    Border = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.28,
+    Glass = Color3.fromRGB(250, 252, 255),
+    GlassTransparency = 0.36,
+    Success = Color3.fromRGB(40, 180, 100),
+    Warning = Color3.fromRGB(230, 150, 20),
+    Danger = Color3.fromRGB(220, 50, 50),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(240, 246, 252),
+    DockTransparency = 0.32,
+    IconColor = Color3.fromRGB(30, 45, 60),
+    TabInactive = Color3.fromRGB(110, 130, 150),
+    Sheen = Color3.fromRGB(255, 255, 255),
+    Widget = Color3.fromRGB(220, 230, 240)
+}
+
+MacUI.CurrentTheme = "Golden Gate"
 
 function MacUI:RegisterTheme(name, themeTable)
     self.Themes[name] = themeTable
@@ -904,6 +1123,7 @@ function MacUI:PlayBootSequence(options)
 
     -- Finish
     task.delay(duration, function()
+        PlaySFX("Boot", 1.05, 0.7)
         MacUI.Tween(logo, {Time = 0.35}, {ImageTransparency = 1})
         MacUI.Tween(track, {Time = 0.3}, {BackgroundTransparency = 1})
         MacUI.Tween(fill, {Time = 0.3}, {BackgroundTransparency = 1})
@@ -982,6 +1202,7 @@ function MacUI:Notify(options)
     contentLbl.Parent = notif
 
     table.insert(self.Notifications, notifContainer)
+    PlaySFX("Notify", 1.1, 0.55)
 
     -- Slide in + pop/scale bounce
     local notifScale = Instance.new("UIScale")
@@ -1086,7 +1307,7 @@ function MacUI:CreateWindow(options)
 
     local name = options.Name or "MacUI"
     local subtitle = options.Subtitle or ""
-    local themeName = options.Theme or "Liquid Glass Dark"
+    local themeName = options.Theme or "Golden Gate"
     local acrylic = options.Acrylic ~= false
     local size = options.Size or UDim2.new(0, 760, 0, 500)
     local minSize = options.MinSize or Vector2.new(480, 320)
@@ -1201,59 +1422,119 @@ function MacUI:CreateWindow(options)
     searchBtn.ZIndex = 11
     searchBtn.Parent = titleBar
 
-    -- Key-system battery indicator: remaining time on the current key session, shown as a
-    -- draining percentage. Only created when a key system is actually configured - it has
-    -- nothing meaningful to show otherwise.
+    -- Key-system battery indicator — styled like the real macOS menu-bar battery:
+    -- percentage text + battery body outline + inner fill + tip nub.
+    -- Only created when a key system is actually configured.
     if MacUI.KeySystem.Enabled then
-        local keyBattery = CreateGlassFrame(titleBar, {
-            Radius = 6, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false
-        })
-        keyBattery.Size = UDim2.new(0, 64, 0, 22)
-        keyBattery.Position = UDim2.new(1, -104, 0.5, -11)
+        local keyBattery = Instance.new("Frame")
+        keyBattery.Name = "KeyBattery"
+        keyBattery.Size = UDim2.new(0, 72, 0, 18)
+        keyBattery.Position = UDim2.new(1, -112, 0.5, -9)
+        keyBattery.BackgroundTransparency = 1
         keyBattery.ZIndex = 11
-        local battBase = GetGlassBase(keyBattery)
-        battBase.ClipsDescendants = true
+        keyBattery.Parent = titleBar
 
-        local fill = Instance.new("Frame")
-        fill.Name = "Fill"
-        fill.Size = UDim2.new(1, 0, 1, 0)
-        fill.BackgroundColor3 = theme.Success
-        fill.BackgroundTransparency = 0.75
-        fill.BorderSizePixel = 0
-        fill.Parent = battBase
-
+        -- Percentage label (left of the icon, like macOS)
         local pctLbl = Instance.new("TextLabel")
-        pctLbl.Size = UDim2.new(1, 0, 1, 0)
+        pctLbl.Name = "Percent"
+        pctLbl.Size = UDim2.new(0, 32, 1, 0)
+        pctLbl.Position = UDim2.new(0, 0, 0, 0)
         pctLbl.BackgroundTransparency = 1
         pctLbl.Text = "--%"
         pctLbl.TextColor3 = theme.Text
         pctLbl.Font = Enum.Font.GothamMedium
-        pctLbl.TextSize = 12
+        pctLbl.TextSize = 11
+        pctLbl.TextXAlignment = Enum.TextXAlignment.Right
         pctLbl.ZIndex = 12
-        pctLbl.Parent = battBase
+        pctLbl.Parent = keyBattery
 
-        -- The drain rate is just Remaining / Total - a short Timer naturally drains faster
-        -- in real time than a long one, no extra logic needed.
+        -- Battery body (rounded rectangle outline)
+        local body = Instance.new("Frame")
+        body.Name = "Body"
+        body.Size = UDim2.new(0, 28, 0, 12)
+        body.Position = UDim2.new(0, 36, 0.5, -6)
+        body.BackgroundTransparency = 1
+        body.BorderSizePixel = 0
+        body.ZIndex = 12
+        body.Parent = keyBattery
+
+        local bodyStroke = Instance.new("UIStroke")
+        bodyStroke.Color = theme.Text
+        bodyStroke.Transparency = 0.25
+        bodyStroke.Thickness = 1.25
+        bodyStroke.Parent = body
+
+        local bodyCorner = Instance.new("UICorner")
+        bodyCorner.CornerRadius = UDim.new(0, 2.5)
+        bodyCorner.Parent = body
+
+        -- Inner fill (grows from left, inset so it doesn't touch the stroke)
+        local fill = Instance.new("Frame")
+        fill.Name = "Fill"
+        fill.Size = UDim2.new(1, -4, 1, -4)
+        fill.Position = UDim2.new(0, 2, 0, 2)
+        fill.BackgroundColor3 = theme.Success
+        fill.BorderSizePixel = 0
+        fill.ZIndex = 13
+        fill.Parent = body
+
+        local fillCorner = Instance.new("UICorner")
+        fillCorner.CornerRadius = UDim.new(0, 1.5)
+        fillCorner.Parent = fill
+
+        -- Battery tip / positive terminal (small nub on the right)
+        local tip = Instance.new("Frame")
+        tip.Name = "Tip"
+        tip.Size = UDim2.new(0, 2, 0, 5)
+        tip.Position = UDim2.new(0, 64, 0.5, -2.5)
+        tip.BackgroundColor3 = theme.Text
+        tip.BackgroundTransparency = 0.25
+        tip.BorderSizePixel = 0
+        tip.ZIndex = 12
+        tip.Parent = keyBattery
+
+        local tipCorner = Instance.new("UICorner")
+        tipCorner.CornerRadius = UDim.new(0, 1)
+        tipCorner.Parent = tip
+
         local function RefreshBattery()
             if not (keyBattery and keyBattery.Parent) then return false end
             local status = MacUI:GetKeyStatus()
             if status.Remaining and status.Total and status.Total > 0 then
                 local pct = math.clamp(status.Remaining / status.Total, 0, 1)
-                pctLbl.Text = math.floor(pct * 100) .. "%"
-                MacUI.Tween(fill, {Time = 0.3}, {Size = UDim2.new(pct, 0, 1, 0)})
-                local color = theme.Success
-                if pct < 0.2 then color = theme.Danger
-                elseif pct < 0.5 then color = theme.Warning end
+                local pctInt = math.floor(pct * 100 + 0.5)
+                pctLbl.Text = pctInt .. "%"
+                -- Fill width scales inside the body (full width of fill frame = 1)
+                -- Inner width leaves 2px padding on each side of the 28px body
+                local innerW = math.max(0, math.floor((28 - 4) * pct + 0.5))
+                MacUI.Tween(fill, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
+                    Size = UDim2.new(0, innerW, 1, -4)
+                })
+                local color = theme.Text
+                if pct <= 0.15 then
+                    color = theme.Danger
+                elseif pct <= 0.30 then
+                    color = theme.Warning
+                else
+                    color = theme.Success
+                end
                 fill.BackgroundColor3 = color
+                -- Low battery: make outline match fill color (macOS does this in red)
+                if pct <= 0.15 then
+                    bodyStroke.Color = theme.Danger
+                    tip.BackgroundColor3 = theme.Danger
+                else
+                    bodyStroke.Color = theme.Text
+                    tip.BackgroundColor3 = theme.Text
+                end
             else
-                pctLbl.Text = status.Valid and "OK" or "..."
-                fill.Size = UDim2.new(1, 0, 1, 0)
+                pctLbl.Text = status.Valid and "100%" or "--%"
+                fill.Size = UDim2.new(0, status.Valid and 24 or 0, 1, -4)
+                fill.BackgroundColor3 = status.Valid and theme.Success or theme.SecondaryText
             end
             return true
         end
         RefreshBattery()
-        -- Self-terminating: stops once keyBattery (and the window it's parented under) is
-        -- destroyed, no manual connection bookkeeping required.
         task.spawn(function()
             while RefreshBattery() do
                 task.wait(1)
@@ -1429,16 +1710,19 @@ function MacUI:CreateWindow(options)
 
     -- Traffic light actions
     TrackConnection(closeBtn.MouseButton1Click:Connect(function()
+        PlaySFX("Close", 0.95, 0.6)
         MacUI.PulseScale(closeBtn, 0.85, 0.15)
         task.delay(0.12, function()
             Window:Destroy()
         end)
     end))
     TrackConnection(minBtn.MouseButton1Click:Connect(function()
+        PlaySFX("Close", 1.05, 0.5)
         MacUI.PulseScale(minBtn, 0.85, 0.15)
         Window:Minimize()
     end))
     TrackConnection(maxBtn.MouseButton1Click:Connect(function()
+        PlaySFX("Click", 1.1, 0.5)
         MacUI.PulseScale(maxBtn, 0.85, 0.15)
         Window:Maximize()
     end))
@@ -1740,6 +2024,15 @@ function MacUI:CreateWindow(options)
                 MacUI:SetAccessibility({ReducedMotion = val})
             end
         })
+        accessibility:CreateSlider({
+            Name = "SFX Volume",
+            Range = {0, 100},
+            Increment = 5,
+            CurrentValue = math.floor((MacUI.SFXVolume or 0.55) * 100),
+            Callback = function(val)
+                MacUI:SetSFXVolume(val / 100)
+            end
+        })
         accessibility:CreateKeybind({
             Name = "Hide/Show Hub",
             CurrentKeybind = self.ToggleKey,
@@ -1851,6 +2144,7 @@ function MacUI:CreateWindow(options)
                 local icon = Tab.DockIcon or Tab.DockButton:FindFirstChild("Icon")
                 local indicator = Tab.DockButton:FindFirstChild("Indicator")
                 if icon then
+                    PlaySFX("Dock", 1.15, 0.45)
                     MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.Accent})
                     MacUI.Bounce(icon, 14, 0.42)
                 end
@@ -2006,6 +2300,7 @@ function MacUI:CreateWindow(options)
                 local btnScale = Instance.new("UIScale")
                 btnScale.Parent = btnContainer
                 TrackConnection(btn.MouseEnter:Connect(function()
+                    PlaySFX("Hover", 1.3, 0.25)
                     MacUI.Tween(btnBase, {Time = 0.15}, {BackgroundTransparency = 0.15})
                     MacUI.Tween(btnScale, {Time = 0.15, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1.015})
                 end))
@@ -2014,6 +2309,7 @@ function MacUI:CreateWindow(options)
                     MacUI.Tween(btnScale, {Time = 0.15, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1})
                 end))
                 TrackConnection(btn.MouseButton1Click:Connect(function()
+                    PlaySFX("Click", 1.0, 0.55)
                     MacUI.PulseScale(btnContainer, 0.97, 0.18)
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback)
@@ -2072,8 +2368,11 @@ function MacUI:CreateWindow(options)
                 knobCorner.CornerRadius = UDim.new(1, 0)
                 knobCorner.Parent = knob
 
-                local function SetState(val)
+                local function SetState(val, silent)
                     current = val
+                    if not silent then
+                        PlaySFX(val and "ToggleOn" or "ToggleOff", val and 1.2 or 0.9, 0.5)
+                    end
                     MacUI.Tween(track, {Time = 0.22}, {BackgroundColor3 = val and theme.Accent or theme.TertiaryBackground})
                     MacUI.Tween(knob, {Time = 0.3, EasingStyle = Enum.EasingStyle.Back, EasingDirection = Enum.EasingDirection.Out}, {
                         Position = val and UDim2.new(1, -24, 0.5, -11) or UDim2.new(0, 2, 0.5, -11)
@@ -2888,6 +3187,7 @@ function MacUI:CreateWindow(options)
 
     -- Opening animation
     local function OpenWindow()
+        PlaySFX("Open", 1.0, 0.55)
         local winBase = GetGlassBase(windowContainer)
         windowContainer.Visible = true
         windowContainer.Size = UDim2.new(0, 0, 0, 0)
@@ -2949,6 +3249,11 @@ end
 -- from a site instead of hardcoded, a re-entry timer, and a battery-style indicator of how
 -- much of that timer is left. All network/file calls are pcall-wrapped: a site being down
 -- or an executor lacking file functions degrades gracefully instead of erroring.
+--
+-- Sessions are GLOBAL (SaveFolder/SaveFile default to MacUI/KeySystem/session.json).
+-- Changing the hub Name, KeySystem.Title, or Note has ZERO effect on an already-valid
+-- session — retyping the same key in another hub just refreshes the timer. Only changing
+-- the actual Key (or remote GetKeySite value) invalidates a previous session.
 -- ============================================================
 MacUI.KeySystem = {
     Enabled = false,
@@ -2960,6 +3265,8 @@ MacUI.KeySystem = {
     GetTimeFromSite = false,
     Title = "Key System",
     Note = "Enter your key to continue",
+    -- Shared across every hub that uses the default path so different Titles / script names
+    -- still share one valid session.
     SaveFolder = "MacUI/KeySystem",
     SaveFile = "session"
 }
@@ -3040,7 +3347,8 @@ end
 
 -- Checks the entered key against the expected one. On success, starts (or restarts) the
 -- re-entry timer by saving a session file, so RunKeySystem/GetKeyStatus can skip the prompt
--- next time until that timer runs out.
+-- next time until that timer runs out. Retyping the *same* key always succeeds and simply
+-- refreshes the timer — Title / hub name changes are irrelevant.
 function MacUI:VerifyKey(input)
     local expected = self:_ResolveExpectedKey()
     if not expected or expected == "" then
@@ -3058,8 +3366,8 @@ function MacUI:VerifyKey(input)
 end
 
 -- Returns {Valid, Remaining, Total}. Valid is true when KeySystem is off (nothing to check),
--- or when a saved session exists and (Timer == 0, meaning it never expires, or there's still
--- time left on it). Remaining/Total are nil when there's no timer to show.
+-- or when a saved session exists, the stored key still matches the *current* expected key,
+-- and (Timer == 0 or time remains). Title / Note / hub Name never affect validity.
 function MacUI:GetKeyStatus()
     if not self.KeySystem.Enabled then
         return {Valid = true}
@@ -3068,9 +3376,15 @@ function MacUI:GetKeyStatus()
     if not session or not session.timestamp then
         return {Valid = false}
     end
+    -- If the expected key has changed since the session was written, treat as invalid
+    -- so a different product key can't ride on an old session. Matching is case-insensitive.
+    local expected = self:_ResolveExpectedKey()
+    if expected and session.key and tostring(session.key):lower() ~= tostring(expected):lower() then
+        return {Valid = false}
+    end
     local total = session.timer or 0
     if total <= 0 then
-        return {Valid = true}
+        return {Valid = true, Remaining = nil, Total = 0}
     end
     local elapsed = os.time() - session.timestamp
     local remaining = math.max(total - elapsed, 0)
@@ -3195,6 +3509,7 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
     local function Submit()
         local ok = self:VerifyKey(box.Text)
         if ok then
+            PlaySFX("Success", 1.1, 0.7)
             statusLbl.TextColor3 = theme.Success
             statusLbl.Text = "Key accepted."
             task.delay(0.25, function()
@@ -3206,6 +3521,7 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
                 if not callOk then warn("[MacUI] KeySystem OnSuccess error:", err) end
             end
         else
+            PlaySFX("Error", 0.85, 0.65)
             statusLbl.TextColor3 = theme.Danger
             statusLbl.Text = "Invalid key - try again."
             MacUI.Shake(inputContainer, 6, 0.3)
