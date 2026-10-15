@@ -1,6 +1,6 @@
 # Os-UI (WinUI & MacUI)
 
-A collection of lightweight, feature-rich Roblox UI libraries inspired by Windows 10 and macOS Big Sur/Sonoma design systems.
+A collection of lightweight, feature-rich Roblox UI libraries inspired by Windows 10 and macOS Big Sur / Sequoia design systems.
 
 ---
 
@@ -10,7 +10,7 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style
+-- macOS Style (v2.0.0)
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
@@ -18,127 +18,255 @@ local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop1
 
 ## 🍎 MacUI (v2.0.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, glassmorphism on every control (not just the window), boot sequence, Lucide icon support, an executor-ready config system, and a drop-in Settings tab.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, and a full **Key System**.
 
-> **Changelog highlights:** the hub no longer appears (or is clickable) underneath the boot screen; dock icons actually jump/bounce on selection now; dock sizing no longer depends on fragile nested auto-sizing; liquid glass is an explicit 3-layer system (tint + diagonal depth gradient + specular sheen) applied to every control, not just buttons, with an optional 4th "metaball" layer of slow-drifting liquid blobs; every glass panel clips its own contents by default so children can't poke a square corner out past a rounded edge; dropdown lists and the color picker board render on a dedicated overlay layer instead of inside the scrollable tab content, so they're no longer cut off (corners included); the color picker opens a real draggable hue/saturation board; **switching themes now actually recolors every control already on screen**, not just the window chrome; **Minimize now really hides the hub** instead of shrinking to a stuck-open pill, notifies once with the key to bring it back, and that key is rebindable from Settings; and there's a full **Key System** (remote or static key, optional remote timer, re-entry countdown shown as a draining battery badge). See the sections below for each.
+### Changelog highlights (v2.0.0)
+
+- Hub stays hidden (and non-clickable) until the boot sequence finishes
+- Dock icons jump / bounce on selection
+- Dock sizing is reliable (no fragile nested AutomaticSize)
+- **3-layer liquid glass** on every control:
+  1. Base tint
+  2. Diagonal frost / depth gradient
+  3. Specular sheen
+- Optional **4th metaball layer** – slow-drifting liquid blobs
+- Glass panels clip their own contents by default (no square corners poking out)
+- Dropdown lists & color-picker board render on a dedicated overlay layer (no clipping)
+- Real draggable hue + saturation/value color picker
+- Theme switching recolors **every** control already on screen
+- Minimize truly hides the hub (with one-time notification of the toggle key)
+- Toggle key is rebindable live from Settings
+- Full **Key System** (static or remote key, static or remote timer, battery badge)
+
+---
 
 ### Starter Template
 
 ```lua
-local Window = MacUI:CreateWindow({
-    Name = "Admin Panel",
-    Subtitle = "v2.0",
-    Theme = "Liquid Glass Dark", -- see Themes below
-    Boot = true, -- Apple boot animation on load (hub stays hidden until it finishes)
-    Dock = true, -- Show bottom tab dock
-    Acrylic = true, -- Glassmorphism effect
-    Size = UDim2.new(0, 760, 0, 500),
-    MinSize = Vector2.new(480, 320),
-    ConfigurationSaving = {              -- optional, executor-only (see Config section)
-        Enabled = true,
-        Folder = "MyScriptHub",
-        File = "default"
-    }
+local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
+
+-- Optional Key System
+MacUI:SetupKeySystem({
+    Enabled = true,
+    Key = "ABC-123",                                    -- static key (ignored if GetKeySite is set)
+    GetKeySite = nil,                                   -- e.g. "https://yoursite.com/key.txt"
+    KeyLink = "https://discord.gg/yourserver",          -- "Copy Link" button
+    Timer = 3600,                                       -- seconds the key stays valid (0 = never expires)
+    GetTimeSite = nil,                                  -- e.g. "https://yoursite.com/time.txt"
+    GetTimeFromSite = false,                            -- fetch timer length from GetTimeSite
+    Title = "My Hub",
+    Note = "Join the Discord below to get a key"
 })
 
-local HomeTab = Window:CreateTab({
-    Name = "Home",
-    Icon = "home"
-})
+MacUI:RunKeySystem(function()
+    local Window = MacUI:CreateWindow({
+        Name = "Admin Panel",
+        Subtitle = "v2.0",
+        Theme = "Liquid Glass Dark",
+        Boot = true,                -- Apple boot animation
+        Dock = true,                -- bottom tab dock
+        Acrylic = true,             -- glassmorphism
+        Metaballs = true,           -- optional liquid blobs behind the window
+        Size = UDim2.new(0, 760, 0, 500),
+        MinSize = Vector2.new(480, 320),
+        ToggleKey = Enum.KeyCode.RightControl,
+        ConfigurationSaving = {
+            Enabled = true,
+            Folder = "MyScriptHub",
+            File = "default"
+        }
+    })
 
-local MainSection = HomeTab:CreateSection("Main Features")
+    local HomeTab = Window:CreateTab({
+        Name = "Home",
+        Icon = "home"
+    })
 
-MainSection:CreateToggle({
-    Name = "Auto Farm",
-    CurrentValue = false,
-    Flag = "AutoFarm",                   -- persisted + auto-restored if config is on
-    Callback = function(state)
-        print("Auto Farm:", state)
-    end
-})
+    local MainSection = HomeTab:CreateSection("Main Features")
 
-MainSection:CreateButton({
-    Name = "Teleport to Spawn",
-    Description = "Sends your character back to spawn",
-    Callback = function()
-        MacUI:Notify({
-            Title = "Teleported",
-            Content = "Successfully moved to spawn.",
-            Icon = "check",
-            Duration = 3
-        })
-    end
-})
+    MainSection:CreateToggle({
+        Name = "Auto Farm",
+        CurrentValue = false,
+        Flag = "AutoFarm",
+        Callback = function(state)
+            print("Auto Farm:", state)
+        end
+    })
 
--- Optional: a ready-made Settings tab (theme switcher, reduce-motion toggle,
--- Save/Reload/Reset Config buttons when ConfigurationSaving is enabled)
-Window:CreateSettingsTab()
+    MainSection:CreateButton({
+        Name = "Teleport to Spawn",
+        Description = "Sends your character back to spawn",
+        Callback = function()
+            MacUI:Notify({
+                Title = "Teleported",
+                Content = "Successfully moved to spawn.",
+                Icon = "check",
+                Duration = 3
+            })
+        end
+    })
+
+    -- Ready-made Settings tab (theme switcher, reduce-motion, Save/Reload/Reset Config)
+    Window:CreateSettingsTab()
+end, function(reason)
+    print("Key rejected:", reason)
+end)
 ```
+
+---
 
 ### Window Options
 
-| Parameter | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `Name` | string | `"MacUI"` | Main window header text |
-| `Subtitle` | string | `""` | Secondary header text |
-| `Theme` | string | `"Liquid Glass Dark"` | Preset palette to use (see Themes below) |
-| `Boot` | boolean | `true` | Runs startup sequence; the window is hidden until it finishes |
-| `Dock` | boolean | `true` | Dock-style navigation bar |
-| `Acrylic` | boolean | `true` | Background translucency |
-| `Size` | UDim2 | `760x500` | Initial UI bounds |
-| `MinSize` | Vector2 | `480x320` | Reserved for future resize-clamping |
-| `ConfigurationSaving` | table | `{ Enabled = false }` | `{ Enabled, Folder, File }` - see Config section |
-| `Metaballs` | boolean | `false` | Slow-drifting liquid blobs behind the window tint (see below) |
-| `ToggleKey` | KeyCode | `RightControl` | Hides/shows the hub; rebindable live from `Window:CreateSettingsTab()` |
+| Parameter              | Type     | Default                  | Notes |
+|------------------------|----------|--------------------------|-------|
+| `Name`                 | string   | `"MacUI"`                | Main window header text |
+| `Subtitle`             | string   | `""`                     | Secondary header text |
+| `Theme`                | string   | `"Liquid Glass Dark"`    | Preset palette (see Themes) |
+| `Boot`                 | boolean  | `true`                   | Startup sequence; window stays hidden until finished |
+| `Dock`                 | boolean  | `true`                   | Dock-style navigation bar |
+| `Acrylic`              | boolean  | `true`                   | Background translucency |
+| `Metaballs`            | boolean  | `false`                  | Slow-drifting liquid blobs behind the window tint |
+| `Size`                 | UDim2    | `760×500`                | Initial UI bounds |
+| `MinSize`              | Vector2  | `480×320`                | Reserved for future resize clamping |
+| `ToggleKey`            | KeyCode  | `RightControl`           | Hides / shows the hub (rebindable from Settings) |
+| `ConfigurationSaving`  | table    | `{ Enabled = false }`    | `{ Enabled, Folder, File }` |
+
+---
 
 ### Hiding & Theming
 
-- **Minimize** (the dock-style yellow traffic light, `Window:Minimize()`) and **`Window.ToggleKey`** now do the same thing: hide the whole hub with an animation. The first time it hides, you get a one-time notification telling you which key brings it back - it won't repeat on later hides. `Window:Toggle()` is just an alias for `Window:Minimize()`.
-- `MacUI:SetTheme(name)` / the Settings tab's theme dropdown now recolor every control already on the window, not just the title bar and dock - switching themes mid-session actually works.
+- **Minimize** (yellow traffic light or `Window:Minimize()`) and **`Window.ToggleKey`** both hide the entire hub with animation.
+- First hide shows a one-time notification with the key that brings it back.
+- `Window:Toggle()` is an alias for `Window:Minimize()`.
+- `MacUI:SetTheme(name)` / Settings tab theme dropdown recolors **every** control already on the window.
+
+---
 
 ### Themes
 
-Built in: `"Liquid Glass Dark"` (alias `Dark`), `"Liquid Glass Light"` (alias `Light`), `"Graphite"`, `"Midnight"`, `"Blue"`, `"Purple"`, `"Nord"`, `"Solarized"`, `"Rose Pine"`, `"Forest"`, `"Classic Aqua"`.
+Built-in:
+
+| Name                    | Alias   |
+|-------------------------|---------|
+| `Liquid Glass Dark`     | `Dark`  |
+| `Liquid Glass Light`    | `Light` |
+| `Graphite`              |         |
+| `Midnight`              |         |
+| `Blue`                  |         |
+| `Purple`                |         |
+| `Nord`                  |         |
+| `Solarized`             |         |
+| `Rose Pine`             |         |
+| `Forest`                |         |
+| `Classic Aqua`          |         |
 
 ```lua
 MacUI:SetTheme("Nord")
 ```
 
+#### Custom Themes
+
+```lua
+MacUI:RegisterTheme("Dracula", {
+    Background          = Color3.fromRGB(40, 42, 54),
+    SecondaryBackground = Color3.fromRGB(68, 71, 90),
+    TertiaryBackground  = Color3.fromRGB(98, 114, 164),
+    Text                = Color3.fromRGB(248, 248, 242),
+    SecondaryText       = Color3.fromRGB(189, 147, 249),
+    Accent              = Color3.fromRGB(255, 121, 198),
+    Border              = Color3.fromRGB(98, 114, 164),
+    Glass               = Color3.fromRGB(40, 42, 54),
+    Success             = Color3.fromRGB(80, 250, 123),
+    Warning             = Color3.fromRGB(255, 184, 108),
+    Danger              = Color3.fromRGB(255, 85, 85),
+    Shadow              = Color3.fromRGB(0, 0, 0),
+    Dock                = Color3.fromRGB(40, 42, 54)
+})
+
+MacUI:SetTheme("Dracula")
+```
+
+---
+
 ### Available Controls
 
-Every control below renders as a liquid-glass card (translucent fill, frost, sheen, border). `Flag` is optional on the controls that hold state - set it to persist/restore that control's value through the config system (falls back to `Name` if omitted).
+Every control renders as a **3-layer liquid-glass card**.  
+`Flag` is optional on stateful controls — set it to persist / restore the value through the config system (falls back to `Name` if omitted).
 
 ```lua
 -- Toggle
-local Toggle = Section:CreateToggle({ Name = "Enable", CurrentValue = false, Flag = "Enable", Callback = function(val) end })
+local Toggle = Section:CreateToggle({
+    Name = "Enable",
+    CurrentValue = false,
+    Flag = "Enable",
+    Callback = function(val) end
+})
 Toggle:Set(true)
 
 -- Slider
-local Slider = Section:CreateSlider({ Name = "Speed", Range = {0, 100}, Increment = 1, CurrentValue = 16, Flag = "Speed", Callback = function(val) end })
+local Slider = Section:CreateSlider({
+    Name = "Speed",
+    Range = {0, 100},
+    Increment = 1,
+    CurrentValue = 16,
+    Flag = "Speed",
+    Callback = function(val) end
+})
 Slider:Set(50)
 
 -- Dropdown
-local Dropdown = Section:CreateDropdown({ Name = "Select Mode", Options = {"Mode A", "Mode B"}, CurrentOption = "Mode A", Flag = "Mode", Callback = function(opt) end })
+local Dropdown = Section:CreateDropdown({
+    Name = "Select Mode",
+    Options = {"Mode A", "Mode B"},
+    CurrentOption = "Mode A",
+    Flag = "Mode",
+    Callback = function(opt) end
+})
 
 -- Input
-local Input = Section:CreateInput({ Name = "Target User", PlaceholderText = "Username...", Flag = "TargetUser", Callback = function(text) end })
+local Input = Section:CreateInput({
+    Name = "Target User",
+    PlaceholderText = "Username...",
+    Flag = "TargetUser",
+    Callback = function(text) end
+})
 
 -- Keybind
-Section:CreateKeybind({ Name = "Toggle UI Key", CurrentKeybind = Enum.KeyCode.RightShift, Flag = "ToggleKey", Callback = function() Window:Toggle() end })
+Section:CreateKeybind({
+    Name = "Toggle UI Key",
+    CurrentKeybind = Enum.KeyCode.RightShift,
+    Flag = "ToggleKey",
+    Callback = function() Window:Toggle() end,
+    OnChange = function(newKey) end   -- optional: fires when the binding itself changes
+})
 
--- Color Picker: click the swatch to open a draggable hue + saturation/value board
-local ColorPicker = Section:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(255, 0, 0), Flag = "ESPColor", Callback = function(color) end })
+-- Color Picker (real hue + saturation/value board)
+local ColorPicker = Section:CreateColorPicker({
+    Name = "ESP Color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "ESPColor",
+    Callback = function(color) end
+})
 
 -- Segmented Control
-Section:CreateSegmentedControl({ Options = {"Day", "Night"}, Default = "Day", Callback = function(choice) end })
+Section:CreateSegmentedControl({
+    Options = {"Day", "Night"},
+    Default = "Day",
+    Callback = function(choice) end
+})
 
--- Paragraph (also glass now)
-Section:CreateParagraph({ Title = "Info", Content = "Longer description that wraps." })
+-- Paragraph (also glass)
+Section:CreateParagraph({
+    Title = "Info",
+    Content = "Longer description that wraps."
+})
 ```
+
+---
 
 ### Animation Utilities
 
-These are the same tweening helpers the library itself uses internally - handy if you're building custom elements:
+The same tween helpers the library uses internally:
 
 ```lua
 MacUI.Tween(instance, { Time = 0.3, EasingStyle = Enum.EasingStyle.Quint }, { Size = newSize })
@@ -148,26 +276,114 @@ MacUI.PressSquish(instance, scale, duration)   -- quick down-scale click feedbac
 MacUI.Shake(instance, distance, duration)      -- horizontal error shake
 MacUI.PopIn(instance, delaySeconds)            -- staggered fade/scale entrance
 
--- Turn all of the above off (accessibility)
+-- Accessibility
 MacUI:SetAccessibility({ ReducedMotion = true })
 ```
+
+---
 
 ### Config System (Executors)
 
 ```lua
--- Either pass ConfigurationSaving into CreateWindow (auto-creates + auto-loads on open), or:
-MacUI:CreateConfig({ Folder = "MyScriptHub", File = "settings" })
-MacUI:SaveConfig()    -- creates the folder if needed, then writes every Flag value
-MacUI:LoadConfig()    -- reads the saved file into MacUI.Config.Data
+-- Option A: pass into CreateWindow (auto-creates + auto-loads)
+ConfigurationSaving = {
+    Enabled = true,
+    Folder  = "MyScriptHub",
+    File    = "default"
+}
 
--- Re-apply loaded values onto controls that already exist (handled automatically for
--- controls created after a load; use this if you load mid-session):
+-- Option B: manual
+MacUI:CreateConfig({ Folder = "MyScriptHub", File = "settings" })
+MacUI:SaveConfig()    -- creates the folder if needed
+MacUI:LoadConfig()    -- reads into MacUI.Config.Data
+
+-- Re-apply loaded values onto already-created controls
 Window:ApplyConfig()
--- or, equivalently:
-Window:LoadConfig()   -- MacUI:LoadConfig() + Window:ApplyConfig() in one call
+-- or
+Window:LoadConfig()   -- LoadConfig + ApplyConfig in one call
 ```
 
-Any control created with a `Flag` (or just `Name`, as a fallback) restores its saved value automatically the moment it's created - no extra wiring needed as long as `ConfigurationSaving.Enabled` is set (or you called `MacUI:LoadConfig()` before creating the tab). `Window:CreateSettingsTab()` adds Save/Reload/Reset buttons for free when config is enabled.
+Any control created with a `Flag` (or just `Name`) restores its saved value automatically the moment it is created.  
+`Window:CreateSettingsTab()` adds Save / Reload / Reset buttons when config is enabled.
+
+---
+
+### 🔑 Key System
+
+Gates a script behind a key before the hub loads.
+
+| Option            | Type    | Description |
+|-------------------|---------|-------------|
+| `Enabled`         | boolean | Turn the whole system on/off |
+| `Key`             | string  | Static expected key |
+| `GetKeySite`      | string  | URL that returns the current valid key (plain text). Overrides `Key` when reachable |
+| `KeyLink`         | string  | Shown as a “Copy Link” button (uses `setclipboard`) |
+| `Timer`           | number  | Seconds the key stays valid after entry (`0` = never expires) |
+| `GetTimeSite`     | string  | URL that returns the timer length in seconds (plain text) |
+| `GetTimeFromSite` | boolean | Use `GetTimeSite` instead of the static `Timer` |
+| `Title`           | string  | Modal title |
+| `Note`            | string  | Helper text under the title |
+
+```lua
+MacUI:SetupKeySystem({ ... })
+
+MacUI:RunKeySystem(function()          -- onSuccess
+    -- create your window / tabs here
+end, function(reason)                  -- onFail (modal stays open)
+    print("Rejected:", reason)
+end)
+```
+
+**How it works**
+
+1. If Key System is disabled **or** a still-valid session exists → `onSuccess` is called immediately (no prompt).
+2. Otherwise the key-entry modal appears.
+3. Correct key → session saved to disk → `onSuccess` fires.
+4. Wrong key → `onFail("invalid_key")` fires, modal stays open so the user can retry.
+5. When the timer expires the next launch requires the key again.
+
+**Battery badge**
+
+- Appears in the title bar **only when** `KeySystem.Enabled == true`.
+- Shows remaining percentage of the current timer.
+- Drain speed is proportional to the timer length (short timer = faster drain).
+- Color changes: green → orange → red as it empties.
+
+Lower-level helpers (if you want a custom flow):
+
+```lua
+MacUI:VerifyKey(input)          -- bool; also (re)starts the timer on success
+MacUI:GetKeyStatus()            -- { Valid, Remaining, Total }
+MacUI:PromptKeySystem(onSuccess, onFail)  -- just the modal
+```
+
+---
+
+### Liquid Glass & Metaballs
+
+Every glass panel is built with three layers by default:
+
+1. **Base** – tinted translucent fill  
+2. **Frost** – diagonal depth / refraction gradient  
+3. **Sheen** – top specular highlight  
+
+Optional fourth layer:
+
+```lua
+-- On the main window
+Metaballs = true
+
+-- Or manually
+MacUI.AddMetaballs(parentFrame, {
+    Count  = 3,
+    Color  = Color3.fromRGB(10, 132, 255),
+    Size   = {40, 80},
+    Speed  = 5,
+    ZIndex = 1
+})
+```
+
+Soft concentric circles drift slowly and brighten where they overlap, giving a lava-lamp / liquid feel. Respects `ReducedMotion`.
 
 ---
 
@@ -178,13 +394,15 @@ Windows 10 Fluent UI with a bottom taskbar (Lucide icons), Windows-style boot lo
 ### Basic Setup
 
 ```lua
+local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
+
 local Window = WinUI:CreateWindow({
     Name = "Windows 10 Hub",
     LoadingTitle = "WinUI",
     LoadingSubtitle = "Starting...",
-    Theme = "Windows10Dark",      -- see themes below
-    ShowBoot = true,              -- Windows 10 boot spinner
-    BootDuration = 1.8,           -- seconds
+    Theme = "Windows10Dark",
+    ShowBoot = true,
+    BootDuration = 1.8,
     ToggleKey = Enum.KeyCode.RightControl,
     ConfigurationSaving = {
         Enabled = true,
@@ -193,8 +411,7 @@ local Window = WinUI:CreateWindow({
     }
 })
 
--- Tabs appear as Lucide icons on the bottom taskbar
-local Tab = Window:CreateTab("General", "home")   -- name, icon key (or rbxassetid)
+local Tab = Window:CreateTab("General", "home")
 
 Tab:CreateSection("Player Tweaks")
 
@@ -203,12 +420,11 @@ Tab:CreateSlider({
     Range = {16, 250},
     Increment = 1,
     CurrentValue = 16,
-    Flag = "WalkSpeed",           -- used by config saving
+    Flag = "WalkSpeed",
     Callback = function(val)
-        local hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = val
-        end
+        local hum = game.Players.LocalPlayer.Character
+            and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = val end
     end
 })
 
@@ -233,35 +449,25 @@ Tab:CreateButton({
         })
     end
 })
-
-Tab:CreateKeybind({
-    Name = "Hide UI",
-    CurrentKeybind = Enum.KeyCode.RightControl,
-    Callback = function(key)
-        -- fires when a new key is bound; use Window:Toggle() for hide
-        Window:Toggle()
-    end
-})
 ```
 
 ### Window Options
 
-| Parameter | Type | Default | Notes |
-| :--- | :--- | :--- | :--- |
-| `Name` | string | `"WinUI"` | Title bar text |
-| `LoadingTitle` | string | Name | Boot screen title |
-| `LoadingSubtitle` | string | `"Windows 10 UI…"` | Boot screen subtitle |
-| `Theme` | string | `"Windows10"` | Preset palette |
-| `ShowBoot` | boolean | `true` | Windows 10 orbiting-dots boot animation |
-| `BootDuration` | number | `1.8` | How long the boot screen stays (seconds) |
-| `ToggleKey` | KeyCode | `RightControl` | Key to show/hide the window |
-| `ConfigurationSaving` | table | `{ Enabled = false }` | See config section |
+| Parameter             | Type    | Default              | Notes |
+|-----------------------|---------|----------------------|-------|
+| `Name`                | string  | `"WinUI"`            | Title bar text |
+| `LoadingTitle`        | string  | Name                 | Boot screen title |
+| `LoadingSubtitle`     | string  | `"Windows 10 UI…"`   | Boot screen subtitle |
+| `Theme`               | string  | `"Windows10"`        | Preset palette |
+| `ShowBoot`            | boolean | `true`               | Orbiting-dots boot animation |
+| `BootDuration`        | number  | `1.8`                | Seconds the boot screen stays |
+| `ToggleKey`           | KeyCode | `RightControl`       | Show / hide key |
+| `ConfigurationSaving` | table   | `{ Enabled = false }`| See config section |
 
 ### Creating Tabs
 
 ```lua
--- Icon can be a Lucide key or a full rbxassetid:// URL
-local Tab = Window:CreateTab("Combat", "sword")
+local Tab  = Window:CreateTab("Combat", "sword")
 local Tab2 = Window:CreateTab("Visuals", "eye")
 local Tab3 = Window:CreateTab("Settings", "settings")
 ```
@@ -270,78 +476,24 @@ local Tab3 = Window:CreateTab("Settings", "settings")
 
 ### Available Controls
 
-> **Note:** All controls live on the tab (not on sections). Sections are visual headers only.
+> All controls live on the tab (sections are visual headers only).
 
 ```lua
--- Section (header + accent underline)
 Tab:CreateSection("Main")
-
--- Label
 Tab:CreateLabel({ Text = "Some helper text" })
+Tab:CreateParagraph({ Title = "Info", Content = "Longer description that wraps." })
+Tab:CreateButton({ Name = "Click me", Description = "Optional subtitle", Callback = function() end })
 
--- Paragraph card
-Tab:CreateParagraph({
-    Title = "Info",
-    Content = "Longer description that wraps."
-})
-
--- Button
-Tab:CreateButton({
-    Name = "Click me",
-    Description = "Optional subtitle",   -- makes the button taller
-    Callback = function() end
-})
-
--- Toggle  → returns { Set = fn, Get = fn }
-local Toggle = Tab:CreateToggle({
-    Name = "Enable",
-    CurrentValue = false,
-    Flag = "EnableFlag",                 -- persisted if config is on
-    Callback = function(val) end
-})
+local Toggle = Tab:CreateToggle({ Name = "Enable", CurrentValue = false, Flag = "EnableFlag", Callback = function(val) end })
 Toggle:Set(true)
 
--- Slider  → returns { Set = fn, Get = fn }
-local Slider = Tab:CreateSlider({
-    Name = "Speed",
-    Range = {0, 100},
-    Increment = 1,
-    CurrentValue = 16,
-    Flag = "SpeedFlag",
-    Callback = function(val) end
-})
+local Slider = Tab:CreateSlider({ Name = "Speed", Range = {0, 100}, Increment = 1, CurrentValue = 16, Flag = "SpeedFlag", Callback = function(val) end })
 Slider:Set(50)
 
--- Dropdown  → returns { Set = fn, Get = fn }
-Tab:CreateDropdown({
-    Name = "Select Mode",
-    Options = {"Mode A", "Mode B"},
-    CurrentOption = "Mode A",
-    Flag = "ModeFlag",
-    Callback = function(opt) end
-})
-
--- Input (TextBox)
-Tab:CreateInput({
-    Name = "Target User",
-    PlaceholderText = "Username...",
-    Flag = "UserFlag",
-    Callback = function(text) end
-})
-
--- Keybind  → returns { Get = fn, Set = fn }
-Tab:CreateKeybind({
-    Name = "Toggle UI Key",
-    CurrentKeybind = Enum.KeyCode.RightShift,
-    Callback = function(key) end          -- called when a new key is chosen
-})
-
--- Color Picker (cycles preset accents) → returns { Set = fn, Get = fn }
-Tab:CreateColorPicker({
-    Name = "ESP Color",
-    Color = Color3.fromRGB(0, 120, 215),
-    Callback = function(color) end
-})
+Tab:CreateDropdown({ Name = "Select Mode", Options = {"Mode A", "Mode B"}, CurrentOption = "Mode A", Flag = "ModeFlag", Callback = function(opt) end })
+Tab:CreateInput({ Name = "Target User", PlaceholderText = "Username...", Flag = "UserFlag", Callback = function(text) end })
+Tab:CreateKeybind({ Name = "Toggle UI Key", CurrentKeybind = Enum.KeyCode.RightShift, Callback = function(key) end })
+Tab:CreateColorPicker({ Name = "ESP Color", Color = Color3.fromRGB(0, 120, 215), Callback = function(color) end })
 ```
 
 ### Themes
@@ -361,7 +513,7 @@ WinUI:SetAccentColor(Color3.fromRGB(0, 153, 255))
 WinUI:Notify({
     Title = "Success",
     Content = "Settings saved.",
-    Icon = "settings",   -- optional Lucide key
+    Icon = "settings",
     Duration = 4
 })
 ```
@@ -369,88 +521,11 @@ WinUI:Notify({
 ### Config Saving (Executors)
 
 ```lua
--- Enabled via CreateWindow options (see above)
 WinUI:SaveConfiguration()   -- write all Flag values to JSON
-WinUI:LoadConfiguration()   -- restore Flag values (called automatically when available)
+WinUI:LoadConfiguration()   -- restore Flag values (auto-called when available)
 ```
 
-> Flags on Toggle / Slider / Dropdown / Input are stored under `window.ConfigValues` and written when `ConfigurationSaving.Enabled = true`.
-
----
-
-## 🎨 Custom Themes & Configs
-
-### Creating Custom Themes (MacUI)
-
-```lua
-MacUI:RegisterTheme("Dracula", {
-    Background = Color3.fromRGB(40, 42, 54),
-    SecondaryBackground = Color3.fromRGB(68, 71, 90),
-    TertiaryBackground = Color3.fromRGB(98, 114, 164),
-    Text = Color3.fromRGB(248, 248, 242),
-    SecondaryText = Color3.fromRGB(189, 147, 249),
-    Accent = Color3.fromRGB(255, 121, 198),
-    Border = Color3.fromRGB(98, 114, 164),
-    Glass = Color3.fromRGB(40, 42, 54),
-    Success = Color3.fromRGB(80, 250, 123),
-    Warning = Color3.fromRGB(255, 184, 108),
-    Danger = Color3.fromRGB(255, 85, 85),
-    Shadow = Color3.fromRGB(0, 0, 0),
-    Dock = Color3.fromRGB(40, 42, 54)
-})
-
-MacUI:SetTheme("Dracula")
-```
-
-> Built-in MacUI themes: `Liquid Glass Dark` / `Dark`, `Liquid Glass Light` / `Light`, `Graphite`, `Midnight`, `Blue`, `Purple`, `Nord`, `Solarized`, `Rose Pine`, `Forest`, `Classic Aqua`.
-
-### Save System (Executors)
-
-See **Config System (Executors)** under the MacUI section above for the full picture (including `ConfigurationSaving`, `Flag`, and `Window:CreateSettingsTab()`). Minimal version:
-
-```lua
-MacUI:CreateConfig({ Folder = "MyScriptHub", File = "settings" })
-MacUI:SaveConfig()  -- creates the folder automatically if it doesn't exist
-MacUI:LoadConfig()
-```
-
----
-
-## 🔑 Key System (MacUI)
-
-Gates a script behind a key before the hub loads. The key can be a static string or fetched live from a site; how long a successful entry stays valid (the re-entry timer) can likewise be static or fetched from a site; and a battery-style badge in the title bar shows how much of that timer is left - it only appears when the key system is enabled.
-
-```lua
-MacUI:SetupKeySystem({
-    Enabled = true,
-    Key = "ABC-123",                               -- static key; ignored if GetKeySite is set
-    GetKeySite = nil,                               -- e.g. "https://yoursite.com/key.txt" - plain-text response
-    KeyLink = "https://discord.gg/yourserver",       -- shown as a "Copy Link" button (uses setclipboard)
-    Timer = 3600,                                    -- seconds the key stays valid; 0 = never expires
-    GetTimeSite = nil,                               -- e.g. "https://yoursite.com/time.txt" - plain-text seconds
-    GetTimeFromSite = false,                         -- fetch the timer length from GetTimeSite instead of using Timer
-    Title = "My Hub",
-    Note = "Join the Discord below to get a key"
-})
-
--- Wrap your hub in RunKeySystem instead of calling CreateWindow directly:
-MacUI:RunKeySystem(function()
-    local Window = MacUI:CreateWindow({ Name = "My Hub" })
-    -- ... tabs, sections, controls ...
-end, function(reason)
-    print("Key rejected:", reason)
-end)
-```
-
-`RunKeySystem(onSuccess, onFail)` is the whole flow in one call: if the key system is off, or a saved session is still inside its timer window, it calls `onSuccess()` immediately with no prompt. Otherwise it shows the key-entry modal and calls `onSuccess()` once a correct key is submitted (`onFail(reason)` fires on each rejected attempt, modal stays open). A correct entry is saved to disk (on executors that support it), so the next session skips the prompt until the timer runs out - at which point it's required again.
-
-Lower-level pieces, if you want to build your own flow instead of `RunKeySystem`:
-
-```lua
-MacUI:VerifyKey(input)     -- bool; also (re)starts the timer on success
-MacUI:GetKeyStatus()       -- { Valid, Remaining, Total } - Remaining/Total in seconds, nil if no timer
-MacUI:PromptKeySystem(onSuccess, onFail)  -- just the modal, no session check first
-```
+Flags on Toggle / Slider / Dropdown / Input are stored under `window.ConfigValues` and written when `ConfigurationSaving.Enabled = true`.
 
 ---
 
