@@ -532,3 +532,25 @@ Flags on Toggle / Slider / Dropdown / Input are stored under `window.ConfigValue
 ## 📜 License
 
 MIT License. Free to use, modify, and distribute for any Roblox client project.
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+---
+
+
+
+
+---
+
+btw i love MacUI than WinUI cuz is look cool
