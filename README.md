@@ -24,11 +24,14 @@ Gives your script a clean macOS aesthetic complete with a functional Dock, **3-l
 
 - **More SFX wired in**:
   - `Tab` — dock tab switch (alongside the existing dock bounce)
-  - `Slider` — soft tick while dragging (pitch follows value)
+  - `Slider` — soft tick while dragging (pitch follows value); `Grab` on press, `Release` on let-go
   - `Type` / `Focus` — text input focus + character typing ticks
   - `Dropdown` — open list + select option
   - `Segment` — segmented control selection
   - `Restore` — window un-minimize / un-maximize (distinct from Minimize / Maximize)
+  - `Grab` / `Release` — button press, toggle press, slider grab/release
+  - `Search` / `Color` — search panel and color-picker open
+- **Dock anti-float**: 0.4s cooldown between tab switches + Bounce locks a fixed home `Position` so rapid clicks can no longer stack jumps and leave icons floating
 - **Theme image transparency from code**: set `Transparency` or `ImageTransparency` (0–1) in `Image.Options` or via `MacUI:SetThemeImage(name, url, { Transparency = 0.4 })` so the pixel art fades and glass/tint shows through
 - **Callback reference** expanded below (silent `Set`, `OnChange` on keybinds, KeySystem `onFail` reasons)
 
@@ -398,20 +401,21 @@ MacUI.PlaySound("Success", 1.1, 0.8)
 -- Click, Hover, ToggleOn, ToggleOff, Success, Error,
 -- Notify, Boot, Dock, Open, Close, Tab, Type, Slider,
 -- Minimize, Maximize, Restore, Drag, Switch, Copy, Deny,
--- Focus, Dropdown, Segment
+-- Focus, Dropdown, Segment, Grab, Release, Search, Color
 ```
 
 Sounds fire automatically on:
 - Boot complete, notifications
 - Traffic lights — **close**, **minimize**, **maximize**, and **restore** (un-min / un-max) each have distinct sounds
 - Starting to drag a window by its title bar
-- Dock tab selection (`Tab` + dock bounce)
-- Buttons (hover + click)
-- Toggles (on / off)
-- **Slider** ticks while dragging (pitch follows value)
+- Dock tab selection (`Tab` + dock bounce); spam-clicks during the 0.4s cooldown play a quiet `Deny`
+- Buttons (hover + grab on press + click/release)
+- Toggles (hover, grab, on / off)
+- **Slider** grab → ticks while dragging (pitch follows value) → release
 - **Dropdown** open + option select
 - **Segmented control** selection
 - **Input** focus + typing ticks (`Focus` / `Type`)
+- **Color picker** open / close; **Search** panel open / close
 - Theme switching (`MacUI:SetTheme`, including from the Settings dropdown — silent on the window's initial boot theme)
 - Key system: accept / reject / closing the modal / a submit blocked by the cooldown / copying a key or key-site link
 - Window open
