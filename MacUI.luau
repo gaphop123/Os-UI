@@ -1,7 +1,16 @@
 --[[
-    MacUI v2.2.0
+    MacUI v2.3.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.3.0:
+      - More SFX wired in: Tab, Slider, Type, Focus, Dropdown, Segment, Restore.
+        Slider ticks while dragging, inputs tick on type, tabs use Tab (not only Dock),
+        dropdown open/select, segmented control clicks, window restore from minimize.
+      - Theme images support Transparency / ImageTransparency (0–1) from code via
+        Image.Options or MacUI:SetThemeImage(..., { Transparency = 0.4 }).
+        Applied to the rendered pixel container so the glass/tint still shows through.
+      - Callback docs expanded in README (OnChange, silent Set, KeySystem onFail reasons).
 
     v2.2.0:
       - More SFX (Minimize, Maximize, Drag, Switch, Copy, Deny) wired into window
@@ -17,7 +26,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.2.0",
+    Version = "2.3.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -97,16 +106,20 @@ MacUI.Sounds = {
     Boot       = "rbxassetid://6026984224",   -- boot complete
     Dock       = "rbxassetid://9114076550",   -- dock bounce
     Open       = "rbxassetid://6895079853",   -- window open
-    Close      = "rbxassetid://9119713951",   -- window close / minimize
+    Close      = "rbxassetid://9119713951",   -- window close
     Tab        = "rbxassetid://6895079853",   -- tab switch
     Type       = "rbxassetid://9119713951",   -- key type tick
-    Slider     = "rbxassetid://6895079853",   -- slider tick
-    Minimize   = "rbxassetid://9114076550",   -- window minimize (reuses ToggleOn asset, lower pitch)
-    Maximize   = "rbxassetid://9114076550",   -- window maximize (reuses ToggleOn asset, higher pitch)
+    Slider     = "rbxassetid://6895079853",   -- slider tick while dragging
+    Minimize   = "rbxassetid://9114076550",   -- window minimize (lower pitch)
+    Maximize   = "rbxassetid://9114076550",   -- window maximize (higher pitch)
     Drag       = "rbxassetid://9119713951",   -- window drag start, very quiet
     Switch     = "rbxassetid://6895079853",   -- theme switch
     Copy       = "rbxassetid://6026984224",   -- copied to clipboard
     Deny       = "rbxassetid://9119713951",   -- blocked action / cooldown
+    Focus      = "rbxassetid://9119713951",   -- textbox / control focus
+    Dropdown   = "rbxassetid://6895079853",   -- dropdown open or option select
+    Segment    = "rbxassetid://9114076550",   -- segmented control click
+    Restore    = "rbxassetid://9114076550",   -- window restore from minimize
 }
 
 local function PlaySFX(name, pitch, volumeMul)
@@ -522,13 +535,22 @@ function MacUI.ApplyThemeImage(theme, parent)
         -- opts out. Options.Fit controls HOW it's fit when auto-scaling: "cover" (default)
         -- fills the whole window and crops any overflow; "contain" fits the whole image
         -- inside the window, letterboxed, with nothing cropped.
+        -- Options.Transparency or Options.ImageTransparency (0–1) fades the whole image
+        -- so glass/tint shows through; 0 = fully opaque, 1 = invisible.
         local userOptions = theme.Image.Options or {}
         local explicitScale = userOptions.Scale ~= nil
         local autoFit = userOptions.AutoScale ~= false and not explicitScale
         local fitMode = userOptions.Fit or "cover"
+        local imageTransparency = tonumber(userOptions.Transparency or userOptions.ImageTransparency) or 0
+        imageTransparency = math.clamp(imageTransparency, 0, 1)
 
         local renderOpts = {}
-        for k, v in pairs(userOptions) do renderOpts[k] = v end
+        for k, v in pairs(userOptions) do
+            -- Don't pass MacUI-only keys through to PixelJSON.Render
+            if k ~= "Transparency" and k ~= "ImageTransparency" and k ~= "AutoScale" and k ~= "Fit" then
+                renderOpts[k] = v
+            end
+        end
         renderOpts.Parent = holder
         renderOpts.Scale = renderOpts.Scale or 1 -- base pixel-exact render; AutoScale rescales it below
         renderOpts.BackgroundTransparency = 1
@@ -538,8 +560,38 @@ function MacUI.ApplyThemeImage(theme, parent)
             return
         end
 
-        if autoFit then
-            local container = handle.Container
+        local container = handle.Container
+        if container then
+            -- Fade every child frame (pixel blocks) so the image itself is translucent;
+            -- the holder stays fully transparent so only the art is affected.
+            if imageTransparency > 0 then
+                local function ApplyPixelTransparency(root)
+                    for _, desc in ipairs(root:GetDescendants()) do
+                        if desc:IsA("GuiObject") and desc.BackgroundTransparency < 1 then
+                            desc.BackgroundTransparency = math.clamp(
+                                desc.BackgroundTransparency + (1 - desc.BackgroundTransparency) * imageTransparency,
+                                0, 1
+                            )
+                        end
+                    end
+                end
+                ApplyPixelTransparency(container)
+                -- Late-spawned run frames (async render) pick up transparency too
+                container.DescendantAdded:Connect(function(desc)
+                    if desc:IsA("GuiObject") and desc.BackgroundTransparency < 1 then
+                        task.defer(function()
+                            if not desc.Parent then return end
+                            desc.BackgroundTransparency = math.clamp(
+                                desc.BackgroundTransparency + (1 - desc.BackgroundTransparency) * imageTransparency,
+                                0, 1
+                            )
+                        end)
+                    end
+                end)
+            end
+        end
+
+        if autoFit and container then
             container.AnchorPoint = Vector2.new(0.5, 0.5)
             container.Position = UDim2.new(0.5, 0, 0.5, 0)
 
@@ -1008,7 +1060,10 @@ end
 -- Sets (or clears, with url = nil) the PixelJSON background image for a theme. If that
 -- theme is the one currently applied to an open window, the image is swapped immediately;
 -- otherwise it just takes effect the next time this theme is applied/booted into.
--- options (optional): forwarded to PixelJSON.Render, e.g. { Scale = 2 }.
+-- options (optional): forwarded to PixelJSON.Render, plus MacUI keys:
+--   Transparency / ImageTransparency (0–1) — fade the image so glass shows through
+--   AutoScale, Fit ("cover"|"contain"), Scale, etc.
+-- e.g. MacUI:SetThemeImage("Golden Gate", url, { Transparency = 0.45, Fit = "cover" })
 function MacUI:SetThemeImage(themeName, url, options)
     local t = self.Themes[themeName]
     if not t then
@@ -1898,12 +1953,11 @@ function MacUI:CreateWindow(options)
         end)
     end))
     TrackConnection(minBtn.MouseButton1Click:Connect(function()
-        PlaySFX("Minimize", 0.85, 0.5)
         MacUI.PulseScale(minBtn, 0.85, 0.15)
-        Window:Minimize()
+        Window:Minimize() -- plays Minimize or Restore SFX internally
     end))
     TrackConnection(maxBtn.MouseButton1Click:Connect(function()
-        PlaySFX("Maximize", 1.25, 0.55)
+        PlaySFX(Window.IsMaximized and "Restore" or "Maximize", Window.IsMaximized and 1.05 or 1.25, 0.55)
         MacUI.PulseScale(maxBtn, 0.85, 0.15)
         Window:Maximize()
     end))
@@ -2059,6 +2113,7 @@ function MacUI:CreateWindow(options)
     -- same method, so pressing it or clicking the dock-minimize button behave identically.
     function Window:Minimize()
         if self.IsMinimized then
+            PlaySFX("Restore", 1.15, 0.5)
             windowContainer.Visible = true
             windowContainer.Size = UDim2.new(0, 0, 0, 0)
             MacUI.Tween(windowContainer, {Time = 0.3, EasingStyle = Enum.EasingStyle.Back, EasingDirection = Enum.EasingDirection.Out}, {
@@ -2066,6 +2121,7 @@ function MacUI:CreateWindow(options)
             })
             self.IsMinimized = false
         else
+            PlaySFX("Minimize", 0.85, 0.5)
             self.OriginalSize = windowContainer.Size
             local t = MacUI.Tween(windowContainer, {Time = 0.25, EasingStyle = Enum.EasingStyle.Quint}, {
                 Size = UDim2.new(0, 0, 0, 0)
@@ -2333,7 +2389,8 @@ function MacUI:CreateWindow(options)
                 local icon = Tab.DockIcon or Tab.DockButton:FindFirstChild("Icon")
                 local indicator = Tab.DockButton:FindFirstChild("Indicator")
                 if icon then
-                    PlaySFX("Dock", 1.15, 0.45)
+                    PlaySFX("Tab", 1.1, 0.4)
+                    PlaySFX("Dock", 1.15, 0.35)
                     MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.Accent})
                     MacUI.Bounce(icon, 14, 0.42)
                 end
@@ -2661,16 +2718,25 @@ function MacUI:CreateWindow(options)
                 knobCorner.Parent = knob
 
                 local sliding = false
-                local function Update(val)
+                local lastTickVal = current
+                local function Update(val, silent)
                     val = math.clamp(math.floor(val / increment + 0.5) * increment, min, max)
+                    local changed = val ~= current
                     current = val
                     local alpha = (val - min) / (max - min)
                     fill.Size = UDim2.new(alpha, 0, 1, 0)
                     knob.Position = UDim2.new(alpha, -8, 0.5, -8)
                     valueLbl.Text = tostring(val)
-                    if opts.Callback then
-                        local ok, err = pcall(opts.Callback, val)
-                        if not ok then warn("[MacUI] Callback error:", err) end
+                    if changed and not silent then
+                        -- Soft tick only when the stepped value actually moves
+                        if val ~= lastTickVal then
+                            lastTickVal = val
+                            PlaySFX("Slider", 0.95 + (alpha * 0.25), 0.22)
+                        end
+                        if opts.Callback then
+                            local ok, err = pcall(opts.Callback, val)
+                            if not ok then warn("[MacUI] Callback error:", err) end
+                        end
                     end
                     if flag then MacUI.Config.Data[flag] = val end
                 end
@@ -2679,6 +2745,8 @@ function MacUI:CreateWindow(options)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         sliding = true
                         MacUI.Tween(knob, {Time = 0.14, EasingStyle = Enum.EasingStyle.Back}, {Size = UDim2.new(0, 20, 0, 20)})
+                        local rel = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                        Update(min + rel * (max - min))
                     end
                 end))
                 TrackConnection(UserInputService.InputChanged:Connect(function(input)
@@ -2753,9 +2821,12 @@ function MacUI:CreateWindow(options)
                 local function SelectOption(opt, silent)
                     current = opt
                     dropBtn.Text = opt
-                    if not silent and opts.Callback then
-                        local ok, err = pcall(opts.Callback, opt)
-                        if not ok then warn("[MacUI] Callback error:", err) end
+                    if not silent then
+                        PlaySFX("Dropdown", 1.15, 0.4)
+                        if opts.Callback then
+                            local ok, err = pcall(opts.Callback, opt)
+                            if not ok then warn("[MacUI] Callback error:", err) end
+                        end
                     end
                     if flag then MacUI.Config.Data[flag] = opt end
                 end
@@ -2763,6 +2834,7 @@ function MacUI:CreateWindow(options)
                 TrackConnection(dropBtn.MouseButton1Click:Connect(function()
                     open = not open
                     if open then
+                        PlaySFX("Dropdown", 0.95, 0.35)
                         -- Parented to the window's overlay layer (not `row`) so the list
                         -- isn't clipped - rounded corners included - by the scrollable tab
                         -- content it would otherwise sit inside.
@@ -2872,6 +2944,14 @@ function MacUI:CreateWindow(options)
                     if flag then MacUI.Config.Data[flag] = box.Text end
                 end
 
+                TrackConnection(box.Focused:Connect(function()
+                    PlaySFX("Focus", 1.2, 0.28)
+                end))
+                TrackConnection(box:GetPropertyChangedSignal("Text"):Connect(function()
+                    if box:IsFocused() then
+                        PlaySFX("Type", 1.35, 0.18)
+                    end
+                end))
                 TrackConnection(box.FocusLost:Connect(function()
                     Commit(true)
                 end))
@@ -3311,7 +3391,9 @@ function MacUI:CreateWindow(options)
                     buttons[opt] = b
 
                     TrackConnection(b.MouseButton1Click:Connect(function()
+                        if current == opt then return end
                         current = opt
+                        PlaySFX("Segment", 1.2, 0.4)
                         for name, btn in pairs(buttons) do
                             MacUI.Tween(btn, {Time = 0.18}, {
                                 BackgroundTransparency = (name == opt) and 0.2 or 1,
