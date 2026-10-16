@@ -1,11 +1,23 @@
 --[[
-    MacUI v2.1.0
+    MacUI v2.2.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.2.0:
+      - More SFX (Minimize, Maximize, Drag, Switch, Copy, Deny) wired into window
+        chrome, theme switching and the key-system modal.
+      - Key-system modal: 0.5s submit cooldown, a close (x) button, and a "Get Link"
+        button that appears whenever KeySystem.GetKeySite is configured (alongside
+        the existing KeyLink "Copy Link" button).
+      - Themes can set an optional Image = { URL = "...", Options = {...} } table to
+        render a PixelJSON (https://github.com/gaphop123/PixelJSON-Pro) pixel-art
+        background behind window content. Only fetched/rendered when a theme sets
+        Image.URL at boot/CreateWindow time - themes with no Image stay exactly as
+        before (plain color/glass, no network call, no image).
 ]]
 
 local MacUI = {
-    Version = "2.1.0",
+    Version = "2.2.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -89,6 +101,12 @@ MacUI.Sounds = {
     Tab        = "rbxassetid://6895079853",   -- tab switch
     Type       = "rbxassetid://9119713951",   -- key type tick
     Slider     = "rbxassetid://6895079853",   -- slider tick
+    Minimize   = "rbxassetid://9114076550",   -- window minimize (reuses ToggleOn asset, lower pitch)
+    Maximize   = "rbxassetid://9114076550",   -- window maximize (reuses ToggleOn asset, higher pitch)
+    Drag       = "rbxassetid://9119713951",   -- window drag start, very quiet
+    Switch     = "rbxassetid://6895079853",   -- theme switch
+    Copy       = "rbxassetid://6026984224",   -- copied to clipboard
+    Deny       = "rbxassetid://9119713951",   -- blocked action / cooldown
 }
 
 local function PlaySFX(name, pitch, volumeMul)
@@ -423,6 +441,79 @@ function MacUI.AddIcon(name, assetIdOrData)
         local id = tonumber(tostring(assetIdOrData):match("%d+")) or 0
         LucideSprites[key] = { id, {48, 48}, {0, 0} }
     end
+end
+
+-- ============================================================
+-- Theme background image via PixelJSON Pro
+-- https://github.com/gaphop123/PixelJSON-Pro
+--
+-- A theme can optionally carry an Image = { URL = "...", Options = {...} }
+-- table, where URL points to a PixelJSON (.json) image. This is ONLY ever
+-- fetched and rendered when a theme actually sets Image.URL. Themes with no
+-- Image configured (the default for every built-in theme below) never touch
+-- the network and never show an image — the window just keeps its plain
+-- color/glass look, exactly as before.
+-- ============================================================
+local PixelJSONModule = nil
+local function LoadPixelJSON()
+    if PixelJSONModule then return PixelJSONModule end
+    local ok, mod = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/PixelJSON-Pro/refs/heads/main/main.luau"))()
+    end)
+    if ok and type(mod) == "table" and mod.LoadJSONFromURL and mod.Render then
+        PixelJSONModule = mod
+        return PixelJSONModule
+    end
+    warn("[MacUI] Couldn't load PixelJSON Pro for theme image:", mod)
+    return nil
+end
+
+-- Renders theme.Image.URL into `parent`, sat behind everything else (ZIndex 0) and
+-- clipped to the window's rounded corners. No-ops with zero network calls and zero
+-- instances created if the theme has no Image.URL set. Returns the holder Frame (or nil)
+-- so callers (theme switching) can destroy it before re-applying.
+function MacUI.ApplyThemeImage(theme, parent)
+    if not theme or not theme.Image or not theme.Image.URL or theme.Image.URL == "" then
+        return nil -- default theme: no image configured, nothing to load
+    end
+
+    local holder = Instance.new("Frame")
+    holder.Name = "ThemeImage"
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1, 0, 1, 0)
+    holder.ZIndex = 0
+    holder.ClipsDescendants = true
+    holder.Parent = parent
+
+    task.spawn(function()
+        local PixelJSON = LoadPixelJSON()
+        if not PixelJSON then
+            if holder and holder.Parent then holder:Destroy() end
+            return
+        end
+
+        PixelJSON.LoadJSONFromURL(theme.Image.URL, theme.Image.Options or {}, function(err, data)
+            if not (holder and holder.Parent) then return end -- window/theme changed before load finished
+            if err or not data then
+                warn("[MacUI] Theme image failed to load, falling back to no image:", err)
+                holder:Destroy()
+                return
+            end
+            local renderOpts = {}
+            if theme.Image.Options then
+                for k, v in pairs(theme.Image.Options) do renderOpts[k] = v end
+            end
+            renderOpts.Parent = holder
+            renderOpts.Scale = renderOpts.Scale or 1
+            renderOpts.BackgroundTransparency = 1
+            local handle, rErr = PixelJSON.Render(data, renderOpts)
+            if not handle then
+                warn("[MacUI] Theme image render failed, falling back to no image:", rErr)
+            end
+        end)
+    end)
+
+    return holder
 end
 
 -- Theme system — Liquid Glass first (matches macOS Sequoia style)
@@ -853,13 +944,38 @@ function MacUI:RegisterTheme(name, themeTable)
     self.Themes[name] = themeTable
 end
 
-function MacUI:SetTheme(name)
+-- Sets (or clears, with url = nil) the PixelJSON background image for a theme. If that
+-- theme is the one currently applied to an open window, the image is swapped immediately;
+-- otherwise it just takes effect the next time this theme is applied/booted into.
+-- options (optional): forwarded to PixelJSON.Render, e.g. { Scale = 2 }.
+function MacUI:SetThemeImage(themeName, url, options)
+    local t = self.Themes[themeName]
+    if not t then
+        warn("[MacUI] Warning: Theme '" .. tostring(themeName) .. "' does not exist")
+        return
+    end
+    if url and url ~= "" then
+        t.Image = { URL = url, Options = options }
+    else
+        t.Image = nil
+    end
+    if self.CurrentTheme == themeName then
+        self:SetTheme(themeName, true)
+    end
+end
+
+-- silent: true suppresses the "Switch" SFX — used internally when a window first boots
+-- into its starting theme, so opening a hub doesn't itself play a theme-switch sound.
+function MacUI:SetTheme(name, silent)
     if not self.Themes[name] then
         warn("[MacUI] Warning: Theme '" .. tostring(name) .. "' does not exist")
         return
     end
     self.CurrentTheme = name
     local theme = self.Themes[name]
+    if not silent then
+        PlaySFX("Switch", 1.0, 0.5)
+    end
     for _, window in pairs(self.Windows) do
         if window and window.ApplyTheme then
             window:ApplyTheme(theme)
@@ -1328,7 +1444,7 @@ function MacUI:CreateWindow(options)
         pendingConfigLoad = true
     end
 
-    self:SetTheme(themeName)
+    self:SetTheme(themeName, true)
     local theme = self.Themes[themeName]
 
     local screenGui = Instance.new("ScreenGui")
@@ -1358,6 +1474,9 @@ function MacUI:CreateWindow(options)
 
     local window = GetGlassBase(windowContainer)
     window.ClipsDescendants = true
+
+    -- Theme background image (no-op unless the starting theme sets Image.URL)
+    local themeImageHolder = MacUI.ApplyThemeImage(theme, window)
 
     -- Title bar
     local titleBar = Instance.new("Frame")
@@ -1694,6 +1813,7 @@ function MacUI:CreateWindow(options)
             dragging = true
             dragStart = input.Position
             startPos = windowContainer.Position
+            PlaySFX("Drag", 1.4, 0.15)
         end
     end))
     TrackConnection(UserInputService.InputChanged:Connect(function(input)
@@ -1717,12 +1837,12 @@ function MacUI:CreateWindow(options)
         end)
     end))
     TrackConnection(minBtn.MouseButton1Click:Connect(function()
-        PlaySFX("Close", 1.05, 0.5)
+        PlaySFX("Minimize", 0.85, 0.5)
         MacUI.PulseScale(minBtn, 0.85, 0.15)
         Window:Minimize()
     end))
     TrackConnection(maxBtn.MouseButton1Click:Connect(function()
-        PlaySFX("Click", 1.1, 0.5)
+        PlaySFX("Maximize", 1.25, 0.55)
         MacUI.PulseScale(maxBtn, 0.85, 0.15)
         Window:Maximize()
     end))
@@ -1822,6 +1942,14 @@ function MacUI:CreateWindow(options)
                 sheen.BackgroundColor3 = t.Sheen or Color3.fromRGB(255, 255, 255)
             end
         end
+
+        -- Swap (or clear) the theme background image. Destroying the old holder first
+        -- means a new theme with no Image.URL correctly ends up with no image at all.
+        if themeImageHolder and themeImageHolder.Parent then
+            themeImageHolder:Destroy()
+        end
+        themeImageHolder = MacUI.ApplyThemeImage(t, window)
+
         titleLabel.TextColor3 = t.Text
         searchBtn.ImageColor3 = t.IconColor or t.SecondaryText
 
@@ -3395,9 +3523,22 @@ end
 -- fires once a correct key is entered (and the modal closes itself); onFail(reason) fires on
 -- every rejected attempt (reason is a short string) and does NOT close the modal, so the
 -- person can just try again.
+-- Submissions are rate-limited: SUBMIT_COOLDOWN seconds must pass between Submit() calls
+-- (whether triggered by the button or by pressing Enter in the box), so spamming the
+-- button/key can't hammer GetKeySite or spam onFail.
+local KEY_SUBMIT_COOLDOWN = 0.5
+
 function MacUI:PromptKeySystem(onSuccess, onFail)
     local ks = self.KeySystem
     local theme = self.Themes[self.CurrentTheme] or self.Themes["Liquid Glass Dark"]
+
+    -- A "Get Link" button is offered whenever a remote key site (GetKeySite) is configured,
+    -- in addition to (or instead of) the existing KeyLink "Copy Link" button. The panel
+    -- grows a bit to fit a dedicated row for these when either is present.
+    local hasKeyLink = ks.KeyLink ~= nil and ks.KeyLink ~= ""
+    local hasGetKeySite = ks.GetKeySite ~= nil and ks.GetKeySite ~= ""
+    local hasLinks = hasKeyLink or hasGetKeySite
+    local panelHeight = hasLinks and 264 or 220
 
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "MacUI_KeySystem"
@@ -3415,13 +3556,50 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
     dim.Parent = screenGui
 
     local panel = CreateGlassFrame(screenGui, {Radius = 18, Transparency = 0.1, Color = theme.Background})
-    panel.Size = UDim2.new(0, 340, 0, 220)
-    panel.Position = UDim2.new(0.5, -170, 0.5, -110)
+    panel.Size = UDim2.new(0, 340, 0, panelHeight)
+    panel.Position = UDim2.new(0.5, -170, 0.5, -panelHeight / 2)
     local base = GetGlassBase(panel)
     base.ClipsDescendants = true
 
+    -- Shared close path: used by the close (x) button, and reusable if a future caller
+    -- wants to dismiss the modal programmatically. reason is passed through to onFail.
+    local closed = false
+    local function CloseModal(reason)
+        if closed then return end
+        closed = true
+        MacUI.Tween(panel, {Time = 0.2}, {Size = UDim2.new(0, 0, 0, 0)})
+        task.delay(0.2, function()
+            if screenGui and screenGui.Parent then screenGui:Destroy() end
+        end)
+        if onFail then
+            local callOk, err = pcall(onFail, reason or "closed")
+            if not callOk then warn("[MacUI] KeySystem OnFail error:", err) end
+        end
+    end
+
+    local closeBtn = Instance.new("ImageButton")
+    closeBtn.Name = "CloseButton"
+    closeBtn.Size = UDim2.new(0, 20, 0, 20)
+    closeBtn.Position = UDim2.new(1, -34, 0, 14)
+    closeBtn.BackgroundTransparency = 1
+    MacUI.ApplyIcon(closeBtn, "x")
+    closeBtn.ImageColor3 = theme.SecondaryText
+    closeBtn.ZIndex = 5
+    closeBtn.Parent = base
+    closeBtn.MouseEnter:Connect(function()
+        MacUI.Tween(closeBtn, {Time = 0.12}, {ImageColor3 = theme.Text})
+    end)
+    closeBtn.MouseLeave:Connect(function()
+        MacUI.Tween(closeBtn, {Time = 0.12}, {ImageColor3 = theme.SecondaryText})
+    end)
+    closeBtn.MouseButton1Click:Connect(function()
+        PlaySFX("Close", 0.95, 0.6)
+        MacUI.PulseScale(closeBtn, 0.8, 0.12)
+        CloseModal("closed")
+    end)
+
     local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1, -32, 0, 26)
+    titleLbl.Size = UDim2.new(1, -60, 0, 26)
     titleLbl.Position = UDim2.new(0, 16, 0, 18)
     titleLbl.BackgroundTransparency = 1
     titleLbl.Text = ks.Title or "Key System"
@@ -3472,6 +3650,68 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
     statusLbl.TextXAlignment = Enum.TextXAlignment.Left
     statusLbl.Parent = base
 
+    -- Optional link row: "Copy Link" (KeyLink) and/or "Get Link" (GetKeySite), stacked
+    -- side-by-side when both exist. Sits just above the submit button, bottom-anchored so
+    -- it doesn't need to know the submit button's exact position.
+    if hasLinks then
+        local linkRow = Instance.new("Frame")
+        linkRow.Name = "LinkRow"
+        linkRow.BackgroundTransparency = 1
+        linkRow.Size = UDim2.new(1, -32, 0, 32)
+        linkRow.Position = UDim2.new(0, 16, 1, -100)
+        linkRow.Parent = base
+
+        local function CreateLinkButton(label, sizeUDim, posUDim, onClick)
+            local container = CreateGlassFrame(linkRow, {Radius = 8, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false})
+            container.Size = sizeUDim
+            container.Position = posUDim
+            local linkBase = GetGlassBase(container)
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 1, 0)
+            btn.BackgroundTransparency = 1
+            btn.Text = label
+            btn.TextColor3 = theme.Text
+            btn.Font = Enum.Font.Gotham
+            btn.TextSize = 13
+            btn.Parent = linkBase
+            btn.MouseButton1Click:Connect(onClick)
+            return btn
+        end
+
+        local bothLinks = hasKeyLink and hasGetKeySite
+        local fullWidth = UDim2.new(1, 0, 1, 0)
+        local leftHalf = UDim2.new(0.5, -4, 1, 0)
+        local rightHalf = UDim2.new(0.5, -4, 1, 0)
+
+        if hasKeyLink then
+            CreateLinkButton(
+                "Copy Link",
+                bothLinks and leftHalf or fullWidth,
+                UDim2.new(0, 0, 0, 0),
+                function()
+                    local ok = pcall(function() setclipboard(ks.KeyLink) end)
+                    PlaySFX(ok and "Copy" or "Error", 1.1, 0.5)
+                    statusLbl.TextColor3 = ok and theme.Success or theme.Danger
+                    statusLbl.Text = ok and "Key link copied to clipboard." or "Couldn't copy - link: " .. ks.KeyLink
+                end
+            )
+        end
+
+        if hasGetKeySite then
+            CreateLinkButton(
+                "Get Link",
+                bothLinks and rightHalf or fullWidth,
+                bothLinks and UDim2.new(0.5, 4, 0, 0) or UDim2.new(0, 0, 0, 0),
+                function()
+                    local ok = pcall(function() setclipboard(ks.GetKeySite) end)
+                    PlaySFX(ok and "Copy" or "Error", 1.1, 0.5)
+                    statusLbl.TextColor3 = ok and theme.Success or theme.Danger
+                    statusLbl.Text = ok and "Key site link copied to clipboard." or "Couldn't copy - link: " .. ks.GetKeySite
+                end
+            )
+        end
+    end
+
     local submitContainer = CreateGlassFrame(base, {Radius = 8, Transparency = 0.1, Color = theme.Accent, Layers = false})
     submitContainer.Size = UDim2.new(1, -32, 0, 38)
     submitContainer.Position = UDim2.new(0, 16, 1, -54)
@@ -3485,28 +3725,17 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
     submitBtn.TextSize = 14
     submitBtn.Parent = submitBase
 
-    if ks.KeyLink then
-        submitContainer.Size = UDim2.new(0.62, -20, 0, 38)
-        local linkContainer = CreateGlassFrame(base, {Radius = 8, Transparency = 0.3, Color = theme.TertiaryBackground, Layers = false})
-        linkContainer.Size = UDim2.new(0.38, 0, 0, 38)
-        linkContainer.Position = UDim2.new(0.62, 16, 1, -54)
-        local linkBase = GetGlassBase(linkContainer)
-        local linkBtn = Instance.new("TextButton")
-        linkBtn.Size = UDim2.new(1, 0, 1, 0)
-        linkBtn.BackgroundTransparency = 1
-        linkBtn.Text = "Copy Link"
-        linkBtn.TextColor3 = theme.Text
-        linkBtn.Font = Enum.Font.Gotham
-        linkBtn.TextSize = 13
-        linkBtn.Parent = linkBase
-        linkBtn.MouseButton1Click:Connect(function()
-            local ok = pcall(function() setclipboard(ks.KeyLink) end)
-            statusLbl.TextColor3 = theme.Success
-            statusLbl.Text = ok and "Key link copied to clipboard." or "Couldn't copy - link: " .. ks.KeyLink
-        end)
-    end
-
+    -- 0.5s cooldown between submit attempts (button click or Enter in the box), so a
+    -- spammed key/click can't hammer VerifyKey (and, transitively, GetKeySite) repeatedly.
+    local lastSubmitAt = 0
     local function Submit()
+        local now = os.clock()
+        if now - lastSubmitAt < KEY_SUBMIT_COOLDOWN then
+            PlaySFX("Deny", 0.9, 0.35)
+            return
+        end
+        lastSubmitAt = now
+
         local ok = self:VerifyKey(box.Text)
         if ok then
             PlaySFX("Success", 1.1, 0.7)
@@ -3514,7 +3743,10 @@ function MacUI:PromptKeySystem(onSuccess, onFail)
             statusLbl.Text = "Key accepted."
             task.delay(0.25, function()
                 MacUI.Tween(panel, {Time = 0.25}, {Size = UDim2.new(0, 0, 0, 0)})
-                task.delay(0.25, function() screenGui:Destroy() end)
+                task.delay(0.25, function()
+                    closed = true
+                    if screenGui and screenGui.Parent then screenGui:Destroy() end
+                end)
             end)
             if onSuccess then
                 local callOk, err = pcall(onSuccess)
