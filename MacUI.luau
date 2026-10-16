@@ -514,16 +514,63 @@ function MacUI.ApplyThemeImage(theme, parent)
             return
         end
 
+        -- AutoScale (default on) fills `holder` with the image regardless of the image's
+        -- native pixel size vs the window's actual on-screen size, so a 32x32 pixel-art
+        -- image and a 4K photo both end up correctly sized instead of either rendering
+        -- tiny in a corner or overflowing the window. Set Options.Scale explicitly to opt
+        -- out and get the old fixed-pixel-scale behavior; Options.AutoScale = false also
+        -- opts out. Options.Fit controls HOW it's fit when auto-scaling: "cover" (default)
+        -- fills the whole window and crops any overflow; "contain" fits the whole image
+        -- inside the window, letterboxed, with nothing cropped.
+        local userOptions = theme.Image.Options or {}
+        local explicitScale = userOptions.Scale ~= nil
+        local autoFit = userOptions.AutoScale ~= false and not explicitScale
+        local fitMode = userOptions.Fit or "cover"
+
         local renderOpts = {}
-        if theme.Image.Options then
-            for k, v in pairs(theme.Image.Options) do renderOpts[k] = v end
-        end
+        for k, v in pairs(userOptions) do renderOpts[k] = v end
         renderOpts.Parent = holder
-        renderOpts.Scale = renderOpts.Scale or 1
+        renderOpts.Scale = renderOpts.Scale or 1 -- base pixel-exact render; AutoScale rescales it below
         renderOpts.BackgroundTransparency = 1
         local handle, rErr = PixelJSON.Render(data, renderOpts)
         if not handle then
             warn("[MacUI] Theme image render failed, falling back to no image:", rErr)
+            return
+        end
+
+        if autoFit then
+            local container = handle.Container
+            container.AnchorPoint = Vector2.new(0.5, 0.5)
+            container.Position = UDim2.new(0.5, 0, 0.5, 0)
+
+            local function ApplyAutoFit()
+                if not (holder and holder.Parent and container and container.Parent) then return end
+                local holderSize = holder.AbsoluteSize
+                local containerSize = container.AbsoluteSize
+                if holderSize.X <= 0 or holderSize.Y <= 0 or containerSize.X <= 0 or containerSize.Y <= 0 then
+                    return -- layout not settled yet; the next AbsoluteSize change will retry
+                end
+                local scaleX = holderSize.X / containerSize.X
+                local scaleY = holderSize.Y / containerSize.Y
+                local factor = (fitMode == "contain") and math.min(scaleX, scaleY) or math.max(scaleX, scaleY)
+                local uiScale = container:FindFirstChildOfClass("UIScale")
+                if not uiScale then
+                    uiScale = Instance.new("UIScale")
+                    uiScale.Parent = container
+                end
+                uiScale.Scale = factor
+            end
+
+            ApplyAutoFit()
+            -- Keep filling correctly if the window is resized/restored later.
+            local resizeConn
+            resizeConn = holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                if not (holder and holder.Parent) then
+                    if resizeConn then resizeConn:Disconnect() end
+                    return
+                end
+                ApplyAutoFit()
+            end)
         end
     end)
 
