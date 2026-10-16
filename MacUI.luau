@@ -4,9 +4,11 @@
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
 
     v2.3.0:
-      - More SFX wired in: Tab, Slider, Type, Focus, Dropdown, Segment, Restore.
-        Slider ticks while dragging, inputs tick on type, tabs use Tab (not only Dock),
-        dropdown open/select, segmented control clicks, window restore from minimize.
+      - More SFX wired in: Tab, Slider, Type, Focus, Dropdown, Segment, Restore,
+        Grab, Release, Search, Color. Slider grab/tick/release; buttons press+click;
+        toggles hover/grab; color picker & search open/close.
+      - Dock switch cooldown (0.4s) + Bounce home-position lock so rapid tab clicks
+        can no longer stack jumps and leave icons floating mid-air.
       - Theme images support Transparency / ImageTransparency (0–1) from code via
         Image.Options or MacUI:SetThemeImage(..., { Transparency = 0.4 }).
         Applied to the rendered pixel container so the glass/tint still shows through.
@@ -120,6 +122,10 @@ MacUI.Sounds = {
     Dropdown   = "rbxassetid://6895079853",   -- dropdown open or option select
     Segment    = "rbxassetid://9114076550",   -- segmented control click
     Restore    = "rbxassetid://9114076550",   -- window restore from minimize
+    Grab       = "rbxassetid://9114076550",   -- slider / control grab start
+    Release    = "rbxassetid://6895079853",   -- slider / control release
+    Search     = "rbxassetid://6895079853",   -- search panel open
+    Color      = "rbxassetid://9119713951",   -- color picker open / change
 }
 
 local function PlaySFX(name, pitch, volumeMul)
@@ -175,22 +181,47 @@ function MacUI.Tween(object, info, properties)
     return tween
 end
 
--- Bounce / jump animation (classic Mac dock feel)
+-- Bounce / jump animation (classic Mac dock feel).
+-- Stores a fixed home Position on the object the first time it runs so rapid re-triggers
+-- (or hover position tweens) never capture a mid-air offset and leave the icon floating.
 function MacUI.Bounce(object, height, duration)
     if MacUI.Accessibility.ReducedMotion then return end
+    if not object or not object.Parent then return end
     height = height or 18
     duration = duration or 0.45
-    local original = object.Position
-    local up = original - UDim2.new(0, 0, 0, height)
-    local t1 = MacUI.Tween(object, {Time = duration * 0.35, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out}, {
-        Position = up
-    })
+
+    -- Cancel any in-flight bounce so stacked tweens can't leave the icon elevated
+    local token = (object:GetAttribute("_BounceToken") or 0) + 1
+    object:SetAttribute("_BounceToken", token)
+
+    local home = object:GetAttribute("_BounceHome")
+    if typeof(home) ~= "UDim2" then
+        -- Prefer an explicit home set by the dock (icon rests slightly above center);
+        -- otherwise snapshot the current layout position once.
+        home = object.Position
+        object:SetAttribute("_BounceHome", home)
+    end
+
+    -- Snap to home before jumping so we never start from a floated offset
+    object.Position = home
+    local up = home - UDim2.new(0, 0, 0, height)
+    local t1 = MacUI.Tween(object, {
+        Time = duration * 0.35,
+        EasingStyle = Enum.EasingStyle.Quad,
+        EasingDirection = Enum.EasingDirection.Out
+    }, {Position = up})
     if t1 then
         t1.Completed:Connect(function()
-            MacUI.Tween(object, {Time = duration * 0.65, EasingStyle = Enum.EasingStyle.Bounce, EasingDirection = Enum.EasingDirection.Out}, {
-                Position = original
-            })
+            if not object or not object.Parent then return end
+            if object:GetAttribute("_BounceToken") ~= token then return end
+            MacUI.Tween(object, {
+                Time = duration * 0.65,
+                EasingStyle = Enum.EasingStyle.Bounce,
+                EasingDirection = Enum.EasingDirection.Out
+            }, {Position = home})
         end)
+    else
+        object.Position = home
     end
 end
 
@@ -2347,15 +2378,42 @@ function MacUI:CreateWindow(options)
             DockButton = nil
         }
 
-        local function SelectTab()
+        -- Cooldown between dock tab switches so rapid clicks can't stack Bounce tweens
+        -- and leave icons floating mid-air (home position is also locked on the icon).
+        local DOCK_SWITCH_COOLDOWN = 0.4
+
+        local function SelectTab(fromDockClick)
+            if fromDockClick then
+                local now = os.clock()
+                if Window._LastDockSwitch and (now - Window._LastDockSwitch) < DOCK_SWITCH_COOLDOWN then
+                    PlaySFX("Deny", 0.85, 0.25)
+                    return
+                end
+                -- Don't restart cooldown / bounce when re-clicking the already-active tab
+                if Window.CurrentTab == Tab then
+                    return
+                end
+                Window._LastDockSwitch = now
+            end
+
             for _, t in pairs(Window.Tabs) do
                 t.Content.Visible = false
                 if t.DockButton then
                     local icon = t.DockIcon or t.DockButton:FindFirstChild("Icon")
                     local indicator = t.DockButton:FindFirstChild("Indicator")
                     if icon then
-                        MacUI.Tween(icon, {Time = 0.2}, {
-                            ImageColor3 = theme.TabInactive or theme.SecondaryText
+                        -- Cancel any in-flight bounce and snap back to home so the icon
+                        -- never stays elevated after deselection.
+                        icon:SetAttribute("_BounceToken", (icon:GetAttribute("_BounceToken") or 0) + 1)
+                        local home = icon:GetAttribute("_BounceHome")
+                        if typeof(home) ~= "UDim2" then
+                            home = UDim2.new(0.5, -13, 0.5, -15)
+                            icon:SetAttribute("_BounceHome", home)
+                        end
+                        MacUI.Tween(icon, {Time = 0.18}, {
+                            ImageColor3 = theme.TabInactive or theme.SecondaryText,
+                            Size = UDim2.new(0, 26, 0, 26),
+                            Position = home
                         })
                     end
                     if indicator then
@@ -2391,7 +2449,14 @@ function MacUI:CreateWindow(options)
                 if icon then
                     PlaySFX("Tab", 1.1, 0.4)
                     PlaySFX("Dock", 1.15, 0.35)
-                    MacUI.Tween(icon, {Time = 0.2}, {ImageColor3 = theme.Accent})
+                    -- Ensure home is locked before bounce (matches resting layout)
+                    if typeof(icon:GetAttribute("_BounceHome")) ~= "UDim2" then
+                        icon:SetAttribute("_BounceHome", UDim2.new(0.5, -13, 0.5, -15))
+                    end
+                    MacUI.Tween(icon, {Time = 0.2}, {
+                        ImageColor3 = theme.Accent,
+                        Size = UDim2.new(0, 26, 0, 26)
+                    })
                     MacUI.Bounce(icon, 14, 0.42)
                 end
                 if indicator then
@@ -2423,6 +2488,8 @@ function MacUI:CreateWindow(options)
             icon.ImageColor3 = theme.TabInactive or theme.SecondaryText
             icon.ZIndex = 22
             icon.Parent = dockBtn
+            -- Fixed resting position for Bounce / hover so rapid clicks can't float the icon
+            icon:SetAttribute("_BounceHome", UDim2.new(0.5, -13, 0.5, -15))
 
             local indicator = Instance.new("Frame")
             indicator.Name = "Indicator"
@@ -2437,26 +2504,30 @@ function MacUI:CreateWindow(options)
             indCorner.CornerRadius = UDim.new(1, 0)
             indCorner.Parent = indicator
 
-            -- Hover magnification (classic dock feel)
+            -- Hover magnification (classic dock feel). Uses scale only when possible so we
+            -- don't fight Bounce's Position tweens; falls back to a small lift from home.
             TrackConnection(dockBtn.MouseEnter:Connect(function()
                 if Window.CurrentTab ~= Tab then
+                    PlaySFX("Hover", 1.4, 0.18)
+                    local home = icon:GetAttribute("_BounceHome") or UDim2.new(0.5, -13, 0.5, -15)
                     MacUI.Tween(icon, {Time = 0.18, EasingStyle = Enum.EasingStyle.Back}, {
                         Size = UDim2.new(0, 30, 0, 30),
-                        Position = UDim2.new(0.5, -15, 0.5, -18)
+                        Position = home - UDim2.new(0, 2, 0, 3)
                     })
                 end
             end))
             TrackConnection(dockBtn.MouseLeave:Connect(function()
                 if Window.CurrentTab ~= Tab then
+                    local home = icon:GetAttribute("_BounceHome") or UDim2.new(0.5, -13, 0.5, -15)
                     MacUI.Tween(icon, {Time = 0.18}, {
                         Size = UDim2.new(0, 26, 0, 26),
-                        Position = UDim2.new(0.5, -13, 0.5, -15)
+                        Position = home
                     })
                 end
             end))
             TrackConnection(dockBtn.MouseButton1Click:Connect(function()
                 MacUI.PressSquish(icon, 0.82, 0.2)
-                SelectTab()
+                SelectTab(true) -- true = enforce dock switch cooldown
             end))
 
             Tab.DockButton = dockBtn
@@ -2554,8 +2625,13 @@ function MacUI:CreateWindow(options)
                     MacUI.Tween(btnBase, {Time = 0.15}, {BackgroundTransparency = 0.35})
                     MacUI.Tween(btnScale, {Time = 0.15, EasingStyle = Enum.EasingStyle.Quint}, {Scale = 1})
                 end))
+                TrackConnection(btn.MouseButton1Down:Connect(function()
+                    PlaySFX("Grab", 1.1, 0.3)
+                    MacUI.PressSquish(btnContainer, 0.96, 0.14)
+                end))
                 TrackConnection(btn.MouseButton1Click:Connect(function()
-                    PlaySFX("Click", 1.0, 0.55)
+                    PlaySFX("Click", 1.05, 0.55)
+                    PlaySFX("Release", 1.2, 0.28)
                     MacUI.PulseScale(btnContainer, 0.97, 0.18)
                     if opts.Callback then
                         local ok, err = pcall(opts.Callback)
@@ -2630,8 +2706,12 @@ function MacUI:CreateWindow(options)
                     if flag then MacUI.Config.Data[flag] = val end
                 end
 
+                TrackConnection(row.MouseEnter:Connect(function()
+                    PlaySFX("Hover", 1.35, 0.18)
+                end))
                 TrackConnection(track.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        PlaySFX("Grab", 1.2, 0.28)
                         MacUI.PressSquish(knob, 0.8, 0.16)
                         SetState(not current)
                     end
@@ -2744,6 +2824,7 @@ function MacUI:CreateWindow(options)
                 TrackConnection(track.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         sliding = true
+                        PlaySFX("Grab", 1.15, 0.35)
                         MacUI.Tween(knob, {Time = 0.14, EasingStyle = Enum.EasingStyle.Back}, {Size = UDim2.new(0, 20, 0, 20)})
                         local rel = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
                         Update(min + rel * (max - min))
@@ -2756,8 +2837,9 @@ function MacUI:CreateWindow(options)
                     end
                 end))
                 TrackConnection(UserInputService.InputEnded:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    if sliding and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                         sliding = false
+                        PlaySFX("Release", 1.1, 0.32)
                         MacUI.Tween(knob, {Time = 0.18, EasingStyle = Enum.EasingStyle.Quint}, {Size = UDim2.new(0, 16, 0, 16)})
                     end
                 end))
@@ -3334,8 +3416,10 @@ function MacUI:CreateWindow(options)
 
                 TrackConnection(swatchBtn.MouseButton1Click:Connect(function()
                     if open then
+                        PlaySFX("Release", 1.0, 0.3)
                         ClosePanel()
                     else
+                        PlaySFX("Color", 1.15, 0.4)
                         OpenPanel()
                         open = true
                         MacUI.PopIn(panel, 0)
@@ -3442,7 +3526,12 @@ function MacUI:CreateWindow(options)
 
         TrackConnection(searchBtn.MouseButton1Click:Connect(function()
             searchFrame.Visible = not searchFrame.Visible
-            if searchFrame.Visible then searchBox:CaptureFocus() end
+            if searchFrame.Visible then
+                PlaySFX("Search", 1.2, 0.4)
+                searchBox:CaptureFocus()
+            else
+                PlaySFX("Release", 1.0, 0.28)
+            end
         end))
 
         TrackConnection(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
