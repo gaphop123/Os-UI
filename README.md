@@ -10,15 +10,25 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.1.0) — Golden Gate UI + Liquid Glass + SFX
+-- macOS Style (v2.2.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.1.0)
+## 🍎 MacUI (v2.2.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+
+### Changelog (v2.2.0)
+
+- **More SFX**: `Minimize`, `Maximize`, `Drag`, `Switch`, `Copy`, `Deny` — wired into window chrome (min/max are now distinct from close), window dragging, theme switching, and clipboard-copy feedback
+- **Key System modal upgrades**:
+  - 0.5s cooldown between submit attempts (button click or Enter) — spamming now just plays a quiet "Deny" tick instead of re-checking the key
+  - A **close (×) button** on the modal — closing it fires `onFail("closed")` instead of leaving the script stuck waiting on a key
+  - A **"Get Link" button** that appears automatically whenever `KeySystem.GetKeySite` is set, alongside the existing `KeyLink` "Copy Link" button (both show side-by-side if you set both)
+- **Theme background images**: themes can set `Image = { URL = "...", Options = {...} }` to render a pixel-art background via [PixelJSON-Pro](https://github.com/gaphop123/PixelJSON-Pro), loaded only when a theme actually sets `Image.URL` — every built-in theme still has no image and behaves exactly as before
+- New `MacUI:SetThemeImage(themeName, url, options)` helper to set/clear a theme's image without hand-editing the theme table
 
 ### Changelog (v2.1.0)
 
@@ -71,7 +81,7 @@ MacUI:SetupKeySystem({
 MacUI:RunKeySystem(function()
     local Window = MacUI:CreateWindow({
         Name = "Admin Panel",
-        Subtitle = "v2.1",
+        Subtitle = "v2.2",
         Theme = "Golden Gate",      -- default; or "Liquid Glass Dark", "Nord", etc.
         Boot = true,                -- Apple boot animation
         Dock = true,                -- bottom tab dock
@@ -119,6 +129,7 @@ MacUI:RunKeySystem(function()
     -- Ready-made Settings tab (theme switcher, reduce-motion, SFX volume, Save/Reload/Reset Config)
     Window:CreateSettingsTab()
 end, function(reason)
+    -- "invalid_key" (wrong key, modal stays open) or "closed" (user hit the × button)
     print("Key rejected:", reason)
 end)
 ```
@@ -318,16 +329,19 @@ MacUI.PlaySound("Success", 1.1, 0.8)
 
 -- Built-in sound keys
 -- Click, Hover, ToggleOn, ToggleOff, Success, Error,
--- Notify, Boot, Dock, Open, Close, Tab, Type, Slider
+-- Notify, Boot, Dock, Open, Close, Tab, Type, Slider,
+-- Minimize, Maximize, Drag, Switch, Copy, Deny
 ```
 
 Sounds fire automatically on:
 - Boot complete, notifications
-- Traffic lights (close / minimize / maximize)
+- Traffic lights — **close**, **minimize**, and **maximize** each have their own distinct sound now
+- Starting to drag a window by its title bar
 - Dock tab selection (bounce)
 - Buttons (hover + click)
 - Toggles (on / off)
-- Key system accept / reject
+- Theme switching (`MacUI:SetTheme`, including from the Settings dropdown — silent on the window's initial boot theme)
+- Key system: accept / reject / closing the modal / a submit blocked by the cooldown / copying a key or key-site link
 - Window open
 
 Reduce Motion mutes all SFX. Settings tab includes an **SFX Volume** slider.
@@ -368,13 +382,20 @@ Gates a script behind a key before the hub loads.
 |-------------------|---------|-------------|
 | `Enabled`         | boolean | Turn the whole system on/off |
 | `Key`             | string  | Static expected key |
-| `GetKeySite`      | string  | URL that returns the current valid key (plain text). Overrides `Key` when reachable |
-| `KeyLink`         | string  | Shown as a “Copy Link” button (uses `setclipboard`) |
+| `GetKeySite`      | string  | URL that returns the current valid key (plain text). Overrides `Key` when reachable. Also shows a **“Get Link” button** on the modal (copies this URL via `setclipboard`) |
+| `KeyLink`         | string  | Shown as a “Copy Link” button (uses `setclipboard`). Shows alongside “Get Link” if both are set |
 | `Timer`           | number  | Seconds the key stays valid after entry (`0` = never expires) |
 | `GetTimeSite`     | string  | URL that returns the timer length in seconds (plain text) |
 | `GetTimeFromSite` | boolean | Use `GetTimeSite` instead of the static `Timer` |
 | `Title`           | string  | Modal title (changing this does **not** break sessions) |
 | `Note`            | string  | Helper text under the title |
+
+**Modal controls**
+
+- **Submit** — checks the entered key. Rate-limited to one attempt every **0.5s**; spamming it (or mashing Enter) just plays a quiet “denied” tick instead of re-checking.
+- **× (close)** — dismisses the modal without a key and fires `onFail("closed")`, so you can let people back out of a key-gated hub instead of being stuck.
+- **Copy Link** — only shown when `KeyLink` is set.
+- **Get Link** — only shown when `GetKeySite` is set. Copies the site URL itself (not the key) so the person can go fetch their key.
 
 ```lua
 MacUI:SetupKeySystem({ ... })
@@ -392,7 +413,10 @@ end)
 2. Otherwise the key-entry modal appears.
 3. Correct key → session saved to disk → `onSuccess` fires.
 4. Wrong key → `onFail("invalid_key")` fires, modal stays open so the user can retry.
-5. When the timer expires the next launch requires the key again.
+5. User clicks the **×** close button → `onFail("closed")` fires and the modal tweens away. Nothing is saved, so the modal reappears next run.
+6. When the timer expires the next launch requires the key again.
+
+`onFail`'s `reason` is one of: `"invalid_key"` (wrong key, modal stays open) or `"closed"` (user dismissed the modal via ×).
 
 **Shared sessions across hubs**
 
@@ -443,6 +467,26 @@ MacUI.AddMetaballs(parentFrame, {
 ```
 
 Soft concentric circles drift slowly and brighten where they overlap, giving a lava-lamp / liquid feel. Respects `ReducedMotion`.
+
+---
+
+### 🖼️ Theme Background Images
+
+Any theme can optionally render a pixel-art background behind window content, decoded with [PixelJSON-Pro](https://github.com/gaphop123/PixelJSON-Pro). This is **fully opt-in at the theme level**: a theme with no `Image` set never makes a network request and never shows an image — it looks exactly like before. The image is only fetched/rendered when `CreateWindow` boots into a theme (or `SetTheme` switches to one) that has `Image.URL` configured.
+
+```lua
+-- Set it on a theme table directly...
+MacUI.Themes["Golden Gate"].Image = {
+    URL = "https://yoursite.com/background.json",  -- a PixelJSON (.json) image
+    Options = { Scale = 2 }                         -- forwarded to PixelJSON.Render
+}
+
+-- ...or use the helper (also clears it when url is nil)
+MacUI:SetThemeImage("Golden Gate", "https://yoursite.com/background.json", { Scale = 2 })
+MacUI:SetThemeImage("Golden Gate", nil)  -- back to no image
+```
+
+If the URL fails to load or decode, MacUI logs a warning and silently falls back to the plain themed background — no image, no error shown to the player. Switching themes (via `MacUI:SetTheme` or the Settings dropdown) automatically swaps the image, or clears it if the new theme doesn't have one.
 
 ---
 
