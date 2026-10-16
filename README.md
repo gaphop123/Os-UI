@@ -10,15 +10,27 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.2.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images
+-- macOS Style (v2.3.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.2.0)
+## 🍎 MacUI (v2.3.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images**, boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+
+### Changelog (v2.3.0)
+
+- **More SFX wired in**:
+  - `Tab` — dock tab switch (alongside the existing dock bounce)
+  - `Slider` — soft tick while dragging (pitch follows value)
+  - `Type` / `Focus` — text input focus + character typing ticks
+  - `Dropdown` — open list + select option
+  - `Segment` — segmented control selection
+  - `Restore` — window un-minimize / un-maximize (distinct from Minimize / Maximize)
+- **Theme image transparency from code**: set `Transparency` or `ImageTransparency` (0–1) in `Image.Options` or via `MacUI:SetThemeImage(name, url, { Transparency = 0.4 })` so the pixel art fades and glass/tint shows through
+- **Callback reference** expanded below (silent `Set`, `OnChange` on keybinds, KeySystem `onFail` reasons)
 
 ### Changelog (v2.2.0)
 
@@ -297,6 +309,61 @@ Section:CreateParagraph({
 
 ---
 
+### Callback reference (v2.3.0)
+
+All control callbacks are wrapped in `pcall` — a throw inside your function only logs a warning; it never breaks the UI.
+
+| Control / API | Callback | Args | When it fires |
+|---------------|----------|------|----------------|
+| **Toggle** | `Callback` | `(boolean)` | User flips the switch, or `Set(val)` without the silent flag |
+| **Slider** | `Callback` | `(number)` | Value changes while dragging / clicking the track (stepped by `Increment`) |
+| **Dropdown** | `Callback` | `(string)` | User picks an option; not when `Set(opt, true)` / silent programmatic set |
+| **Input** | `Callback` | `(string)` | Text box loses focus (Enter or click away) |
+| **Keybind** | `Callback` | *(none)* | The bound key is pressed (not while rebinding) |
+| **Keybind** | `OnChange` | `(Enum.KeyCode)` | User finishes rebinding to a new key |
+| **ColorPicker** | `Callback` | `(Color3)` | Color changes while dragging the SV board or hue strip |
+| **SegmentedControl** | `Callback` | `(string)` | A different segment is selected |
+| **Button** | `Callback` | *(none)* | Click |
+| **Key System** | `onSuccess` | *(none)* | Correct key entered (modal closes) **or** a still-valid session already exists |
+| **Key System** | `onFail` | `(reason: string)` | `"invalid_key"` (modal stays open) or `"closed"` (user hit ×) |
+
+**Silent / programmatic sets**
+
+```lua
+Toggle:Set(true)              -- fires Callback (and SFX) by default
+-- Dropdown / Toggle accept a second "silent" argument where implemented:
+Dropdown:Set("Mode B", true)  -- updates UI + Flag, skips Callback + SFX
+
+-- Keybind OnChange vs Callback
+Section:CreateKeybind({
+    Name = "Toggle UI Key",
+    CurrentKeybind = Enum.KeyCode.RightShift,
+    Callback = function()
+        Window:Toggle()          -- fires every time the key is pressed
+    end,
+    OnChange = function(newKey)
+        Window.ToggleKey = newKey -- fires only when the user rebinds
+    end
+})
+```
+
+**Key System flow**
+
+```lua
+MacUI:RunKeySystem(
+    function()                  -- onSuccess
+        -- build window / tabs here
+    end,
+    function(reason)            -- onFail
+        -- reason == "invalid_key"  → wrong key, modal still open
+        -- reason == "closed"       → user dismissed with ×
+        print("Key rejected:", reason)
+    end
+)
+```
+
+---
+
 ### Animation Utilities
 
 The same tween helpers the library uses internally:
@@ -327,19 +394,24 @@ MacUI.SFXVolume = 0
 MacUI.PlaySound("Click")           -- name, optional pitch, optional volumeMul
 MacUI.PlaySound("Success", 1.1, 0.8)
 
--- Built-in sound keys
+-- Built-in sound keys (v2.3.0)
 -- Click, Hover, ToggleOn, ToggleOff, Success, Error,
 -- Notify, Boot, Dock, Open, Close, Tab, Type, Slider,
--- Minimize, Maximize, Drag, Switch, Copy, Deny
+-- Minimize, Maximize, Restore, Drag, Switch, Copy, Deny,
+-- Focus, Dropdown, Segment
 ```
 
 Sounds fire automatically on:
 - Boot complete, notifications
-- Traffic lights — **close**, **minimize**, and **maximize** each have their own distinct sound now
+- Traffic lights — **close**, **minimize**, **maximize**, and **restore** (un-min / un-max) each have distinct sounds
 - Starting to drag a window by its title bar
-- Dock tab selection (bounce)
+- Dock tab selection (`Tab` + dock bounce)
 - Buttons (hover + click)
 - Toggles (on / off)
+- **Slider** ticks while dragging (pitch follows value)
+- **Dropdown** open + option select
+- **Segmented control** selection
+- **Input** focus + typing ticks (`Focus` / `Type`)
 - Theme switching (`MacUI:SetTheme`, including from the Settings dropdown — silent on the window's initial boot theme)
 - Key system: accept / reject / closing the modal / a submit blocked by the cooldown / copying a key or key-site link
 - Window open
@@ -478,13 +550,28 @@ Any theme can optionally render a pixel-art background behind window content, de
 -- Set it on a theme table directly...
 MacUI.Themes["Golden Gate"].Image = {
     URL = "https://yoursite.com/background.json",  -- a PixelJSON (.json) image
-    Options = { Scale = 2 }                         -- forwarded to PixelJSON.Render
+    Options = {
+        Scale = 2,              -- optional fixed pixel scale (disables AutoScale)
+        Fit = "cover",          -- "cover" (default) or "contain"
+        AutoScale = true,       -- fill the window (default on unless Scale is set)
+        Transparency = 0.4,     -- 0 = opaque, 1 = invisible (also accepts ImageTransparency)
+    }
 }
 
 -- ...or use the helper (also clears it when url is nil)
-MacUI:SetThemeImage("Golden Gate", "https://yoursite.com/background.json", { Scale = 2 })
+MacUI:SetThemeImage("Golden Gate", "https://yoursite.com/background.json", {
+    Transparency = 0.45,        -- fade the art so liquid glass still reads through
+    Fit = "cover",
+})
 MacUI:SetThemeImage("Golden Gate", nil)  -- back to no image
 ```
+
+| Option | Type | Default | Notes |
+|--------|------|---------|-------|
+| `Transparency` / `ImageTransparency` | number 0–1 | `0` | Fades every pixel block so the theme glass/tint shows through |
+| `Fit` | `"cover"` \| `"contain"` | `"cover"` | How AutoScale fits the image to the window |
+| `AutoScale` | boolean | `true` | Off when you set `Scale` explicitly |
+| `Scale` | number | `1` | Fixed pixel scale (opts out of AutoScale) |
 
 If the URL fails to load or decode, MacUI logs a warning and silently falls back to the plain themed background — no image, no error shown to the player. Switching themes (via `MacUI:SetTheme` or the Settings dropdown) automatically swaps the image, or clears it if the new theme doesn't have one.
 
