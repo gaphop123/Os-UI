@@ -492,25 +492,39 @@ function MacUI.ApplyThemeImage(theme, parent)
             return
         end
 
-        PixelJSON.LoadJSONFromURL(theme.Image.URL, theme.Image.Options or {}, function(err, data)
-            if not (holder and holder.Parent) then return end -- window/theme changed before load finished
-            if err or not data then
-                warn("[MacUI] Theme image failed to load, falling back to no image:", err)
-                holder:Destroy()
-                return
-            end
-            local renderOpts = {}
-            if theme.Image.Options then
-                for k, v in pairs(theme.Image.Options) do renderOpts[k] = v end
-            end
-            renderOpts.Parent = holder
-            renderOpts.Scale = renderOpts.Scale or 1
-            renderOpts.BackgroundTransparency = 1
-            local handle, rErr = PixelJSON.Render(data, renderOpts)
-            if not handle then
-                warn("[MacUI] Theme image render failed, falling back to no image:", rErr)
-            end
+        -- Fetch with game:HttpGet rather than PixelJSON.LoadJSONFromURL (which uses
+        -- HttpService:RequestAsync internally) -- RequestAsync errors or is simply
+        -- unavailable on most executors, whereas game:HttpGet is the same HTTP call
+        -- used everywhere else in MacUI (Lucide pack, KeySystem GetKeySite/GetTimeSite).
+        local getOk, body = pcall(function()
+            return game:HttpGet(theme.Image.URL)
         end)
+        if not (holder and holder.Parent) then return end -- window/theme changed before fetch finished
+        if not getOk or type(body) ~= "string" or body == "" then
+            warn("[MacUI] Theme image HTTP request failed, falling back to no image:", body)
+            holder:Destroy()
+            return
+        end
+
+        local data, decodeErr = PixelJSON.Decode(body, theme.Image.Options or {})
+        if not (holder and holder.Parent) then return end -- window/theme changed before decode finished
+        if not data then
+            warn("[MacUI] Theme image failed to decode, falling back to no image:", decodeErr)
+            holder:Destroy()
+            return
+        end
+
+        local renderOpts = {}
+        if theme.Image.Options then
+            for k, v in pairs(theme.Image.Options) do renderOpts[k] = v end
+        end
+        renderOpts.Parent = holder
+        renderOpts.Scale = renderOpts.Scale or 1
+        renderOpts.BackgroundTransparency = 1
+        local handle, rErr = PixelJSON.Render(data, renderOpts)
+        if not handle then
+            warn("[MacUI] Theme image render failed, falling back to no image:", rErr)
+        end
     end)
 
     return holder
