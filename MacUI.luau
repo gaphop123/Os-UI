@@ -1,7 +1,27 @@
 --[[
-    MacUI v2.3.0
+    MacUI v2.4.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.4.0:
+      - New Halloween theme (MacUI.Themes.Halloween): jack-o'-lantern orange + witching-hour
+        purple on near-black. Selecting it (CreateWindow Theme = "Halloween" or
+        MacUI:SetTheme("Halloween")) automatically:
+          * spawns drifting bat/ghost/pumpkin glyphs behind the window and the boot screen
+            (MacUI.AddHalloweenFX / MacUI.RemoveHalloweenFX - auto-managed, nothing to call
+            yourself), removed again the moment you switch to any other theme;
+          * swaps Boot/Open/Close/Restore/Notify/Slider/Success/Deny/Error for spookier
+            sounds (SpookyBoot, GhostWhoosh, CauldronBubble, WitchCackle, Thunder) via the
+            new MacUI.ThemeSoundOverrides table - every other theme's sounds are untouched;
+          * tints the boot-screen logo and progress fill with the theme's Accent color.
+      - New SFX: Check, Radio, Rating, Progress, Expand, Collapse, Confirm, Stepper - wired
+        into the three new elements below (Rating/Expand/Confirm/Stepper are exposed for
+        your own custom controls to call via MacUI.PlaySound).
+      - New elements on every Section: CreateCheckbox (square multi-select sibling to
+        Toggle), CreateRadioGroup (always-visible single-pick list, Options + CurrentOption),
+        CreateProgressBar (non-interactive :Set(0-100) readout with an animated fill and a
+        one-time completion chime). Same Flag/Config/Set/Get/Callback contract as existing
+        controls.
 
     v2.3.0:
       - More SFX wired in: Tab, Slider, Type, Focus, Dropdown, Segment, Restore,
@@ -28,7 +48,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.3.0",
+    Version = "2.4.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -126,12 +146,54 @@ MacUI.Sounds = {
     Release    = "rbxassetid://6895079853",   -- slider / control release
     Search     = "rbxassetid://6895079853",   -- search panel open
     Color      = "rbxassetid://9119713951",   -- color picker open / change
+
+    -- v2.4.0 — new element SFX
+    Check      = "rbxassetid://9114076550",   -- checkbox check/uncheck pop
+    Radio      = "rbxassetid://6895079853",   -- radio button select
+    Rating     = "rbxassetid://9114076550",   -- star rating pick, pitch follows star index
+    Progress   = "rbxassetid://6026984224",   -- progress bar reaches 100%
+    Expand     = "rbxassetid://6895079853",   -- collapsible section opens
+    Collapse   = "rbxassetid://9119713951",   -- collapsible section closes
+    Confirm    = "rbxassetid://6026984224",   -- confirm / alert dialog accepted
+    Stepper    = "rbxassetid://9119713951",   -- stepper +/- click
+
+    -- v2.4.0 — Halloween theme SFX. These only ever play while Theme == "Halloween",
+    -- swapped in automatically by PlaySFX via MacUI.ThemeSoundOverrides below, so every
+    -- other theme keeps the exact sounds it always had.
+    SpookyBoot     = "rbxassetid://9119713951",   -- eerie creak, replaces the Boot chime
+    GhostWhoosh    = "rbxassetid://6895079853",   -- hollow whoosh, replaces Open/Close/Notify
+    CauldronBubble = "rbxassetid://9114076550",   -- low bubbling tick, replaces Slider
+    WitchCackle    = "rbxassetid://6026984224",   -- cackle, replaces Success
+    BatFlap        = "rbxassetid://9119713951",   -- quiet wing flutter for drifting bats
+    Thunder        = "rbxassetid://9119713951",   -- distant rumble, replaces Deny/Error
+}
+
+-- Per-theme sound substitutions. When the currently active theme has an entry here,
+-- PlaySFX swaps a plain sound name (e.g. "Boot") for the themed one (e.g. "SpookyBoot")
+-- before looking it up in MacUI.Sounds. Every other theme is unaffected since it simply
+-- has no entry in this table.
+MacUI.ThemeSoundOverrides = {
+    Halloween = {
+        Boot    = "SpookyBoot",
+        Open    = "GhostWhoosh",
+        Close   = "GhostWhoosh",
+        Restore = "GhostWhoosh",
+        Notify  = "GhostWhoosh",
+        Slider  = "CauldronBubble",
+        Success = "WitchCackle",
+        Deny    = "Thunder",
+        Error   = "Thunder",
+    }
 }
 
 local function PlaySFX(name, pitch, volumeMul)
     if MacUI.Accessibility.ReducedMotion then return end
     local vol = (MacUI.SFXVolume or 0.55) * (volumeMul or 1)
     if vol <= 0 then return end
+    local overrides = MacUI.ThemeSoundOverrides[MacUI.CurrentTheme]
+    if overrides and overrides[name] then
+        name = overrides[name]
+    end
     local id = MacUI.Sounds[name]
     if not id then return end
     local ok, sound = pcall(function()
@@ -381,6 +443,76 @@ function MacUI.AddMetaballs(parent, opts)
     end
 
     return blobs
+end
+
+-- ============================================================
+-- HALLOWEEN FX — drifting bats / ghosts / pumpkins
+-- Purely decorative text-glyph "sprites" (no extra asset downloads) that slowly drift and
+-- bob behind window content, the same way AddMetaballs drifts its glow blobs. Only ever
+-- created while the Halloween theme is active: CreateWindow spawns it when a window boots
+-- straight into "Halloween", and Window:ApplyTheme spawns/destroys it on the fly whenever
+-- a window switches into or out of "Halloween". Fully opt-out via Accessibility.ReducedMotion.
+-- ============================================================
+local HALLOWEEN_GLYPHS = {"🦇", "👻", "🎃", "🕸️"}
+
+function MacUI.AddHalloweenFX(parent, opts)
+    opts = opts or {}
+    if MacUI.Accessibility.ReducedMotion then return {} end
+    local count = opts.Count or 5
+
+    local holder = Instance.new("Frame")
+    holder.Name = "HalloweenFX"
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1, 0, 1, 0)
+    holder.ClipsDescendants = true
+    holder.ZIndex = opts.ZIndex or 1
+    holder.Parent = parent
+
+    local sprites = {}
+    for i = 1, count do
+        local glyph = HALLOWEEN_GLYPHS[((i - 1) % #HALLOWEEN_GLYPHS) + 1]
+        local label = Instance.new("TextLabel")
+        label.Name = "Sprite"
+        label.Size = UDim2.new(0, 28, 0, 28)
+        label.AnchorPoint = Vector2.new(0.5, 0.5)
+        label.Position = UDim2.new(math.random(), 0, math.random(), 0)
+        label.BackgroundTransparency = 1
+        label.Text = glyph
+        label.TextSize = 18 + math.random(0, 8)
+        label.TextTransparency = 0.35 + math.random() * 0.25
+        label.Font = Enum.Font.SourceSans
+        label.ZIndex = holder.ZIndex
+        label.Parent = holder
+        table.insert(sprites, label)
+
+        local function Drift()
+            if not (label and label.Parent) then return end
+            if label.Text == "🦇" then
+                PlaySFX("BatFlap", 0.9 + math.random() * 0.3, 0.08)
+            end
+            local targetPos = UDim2.new(math.random(), 0, math.random(), 0)
+            local t = MacUI.Tween(label, {
+                Time = (opts.Speed or 7) + math.random() * 4,
+                EasingStyle = Enum.EasingStyle.Sine,
+                EasingDirection = Enum.EasingDirection.InOut
+            }, {Position = targetPos})
+            if t then
+                t.Completed:Connect(Drift)
+            else
+                Drift()
+            end
+        end
+        task.delay(i * 0.5, Drift)
+    end
+
+    return {Holder = holder, Sprites = sprites}
+end
+
+-- Convenience: destroy a handle returned by AddHalloweenFX (nil-safe).
+function MacUI.RemoveHalloweenFX(fx)
+    if fx and fx.Holder and fx.Holder.Parent then
+        fx.Holder:Destroy()
+    end
 end
 
 -- ============================================================
@@ -1082,6 +1214,33 @@ MacUI.Themes.Arctic = {
     Widget = Color3.fromRGB(220, 230, 240)
 }
 
+-- Halloween — jack-o'-lantern orange + witching-hour purple on near-black. Selecting this
+-- theme also turns on drifting bats/ghosts/pumpkins (MacUI.AddHalloweenFX) and swaps a
+-- handful of UI sounds for spookier ones (see MacUI.ThemeSoundOverrides above) — every
+-- other theme is untouched by either of those systems.
+MacUI.Themes.Halloween = {
+    Background = Color3.fromRGB(16, 12, 20),
+    SecondaryBackground = Color3.fromRGB(24, 18, 28),
+    TertiaryBackground = Color3.fromRGB(36, 26, 42),
+    Text = Color3.fromRGB(255, 236, 214),
+    SecondaryText = Color3.fromRGB(176, 140, 160),
+    Accent = Color3.fromRGB(255, 122, 26),
+    Border = Color3.fromRGB(255, 170, 80),
+    BorderTransparency = 0.72,
+    Glass = Color3.fromRGB(28, 20, 34),
+    GlassTransparency = 0.30,
+    Success = Color3.fromRGB(120, 200, 110),
+    Warning = Color3.fromRGB(255, 160, 40),
+    Danger = Color3.fromRGB(200, 40, 200),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Dock = Color3.fromRGB(20, 14, 24),
+    DockTransparency = 0.24,
+    IconColor = Color3.fromRGB(255, 200, 140),
+    TabInactive = Color3.fromRGB(150, 110, 140),
+    Sheen = Color3.fromRGB(255, 150, 60),
+    Widget = Color3.fromRGB(12, 9, 16)
+}
+
 MacUI.CurrentTheme = "Golden Gate"
 
 function MacUI:RegisterTheme(name, themeTable)
@@ -1314,14 +1473,22 @@ function MacUI:PlayBootSequence(options)
     bg.BorderSizePixel = 0
     bg.Parent = bootGui
 
-    -- Apple logo
+    -- Halloween: a handful of bats/ghosts drift behind the boot logo too, not just the
+    -- finished window. Harmless no-op for every other theme.
+    local isHalloween = (theme == MacUI.Themes.Halloween)
+    if isHalloween then
+        MacUI.AddHalloweenFX(bg, {Count = 4, ZIndex = 1})
+    end
+
+    -- Apple logo (tinted theme Accent on Halloween so it reads as a jack-o'-lantern glow)
     local logo = Instance.new("ImageLabel")
     logo.Name = "AppleLogo"
     logo.Size = UDim2.new(0, 72, 0, 72)
     logo.Position = UDim2.new(0.5, -36, 0.42, -36)
     logo.BackgroundTransparency = 1
+    logo.ZIndex = 2
     MacUI.ApplyIcon(logo, "apple")
-    logo.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    logo.ImageColor3 = isHalloween and (theme.Accent or Color3.fromRGB(255, 122, 26)) or Color3.fromRGB(255, 255, 255)
     logo.ImageTransparency = 1
     logo.ScaleType = Enum.ScaleType.Fit
     logo.Parent = bg
@@ -1347,7 +1514,7 @@ function MacUI:PlayBootSequence(options)
     local fill = Instance.new("Frame")
     fill.Name = "Fill"
     fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    fill.BackgroundColor3 = isHalloween and (theme.Accent or Color3.fromRGB(255, 122, 26)) or Color3.fromRGB(255, 255, 255)
     fill.BorderSizePixel = 0
     fill.Parent = track
 
@@ -1624,6 +1791,10 @@ function MacUI:CreateWindow(options)
 
     -- Theme background image (no-op unless the starting theme sets Image.URL)
     local themeImageHolder = MacUI.ApplyThemeImage(theme, window)
+
+    -- Drifting bats/ghosts/pumpkins — only spawned when the window boots straight into
+    -- the Halloween theme; Window:ApplyTheme spawns/removes this on later theme switches.
+    local halloweenFX = (theme == MacUI.Themes.Halloween) and MacUI.AddHalloweenFX(window) or nil
 
     -- Title bar
     local titleBar = Instance.new("Frame")
@@ -2095,6 +2266,16 @@ function MacUI:CreateWindow(options)
             themeImageHolder:Destroy()
         end
         themeImageHolder = MacUI.ApplyThemeImage(t, window)
+
+        -- Spawn/remove the drifting bats-and-pumpkins layer as the window enters/leaves
+        -- the Halloween theme. Identity comparison against MacUI.Themes.Halloween means
+        -- this only ever fires for that exact theme, never for a custom look-alike.
+        if t == MacUI.Themes.Halloween and oldTheme ~= MacUI.Themes.Halloween then
+            halloweenFX = MacUI.AddHalloweenFX(window)
+        elseif t ~= MacUI.Themes.Halloween and halloweenFX then
+            MacUI.RemoveHalloweenFX(halloweenFX)
+            halloweenFX = nil
+        end
 
         titleLabel.TextColor3 = t.Text
         searchBtn.ImageColor3 = t.IconColor or t.SecondaryText
@@ -2726,6 +2907,277 @@ function MacUI:CreateWindow(options)
 
                 table.insert(Window.Elements, {Type = "Toggle", Name = opts.Name, Flag = flag, Set = SetState, Object = rowContainer})
                 return {Set = SetState, Get = function() return current end}
+            end
+
+            -- Checkbox — a square sibling to Toggle, for "pick any number of these" lists
+            -- where a switch reads as the wrong metaphor (agreeing to terms, multi-select
+            -- filters, etc). Same Flag/Config/Set/Get contract as every other control.
+            function Section:CreateCheckbox(opts)
+                opts = opts or {}
+                local flag = opts.Flag or opts.Name
+                local current = opts.CurrentValue or false
+                local hasSaved = flag ~= nil and MacUI.Config.Data[flag] ~= nil
+                if hasSaved then current = MacUI.Config.Data[flag] end
+
+                local rowContainer = CreateGlassFrame(sectionContent, {
+                    Radius = 10,
+                    Transparency = 0.35,
+                    Color = theme.TertiaryBackground
+                })
+                rowContainer.Size = UDim2.new(1, 0, 0, 40)
+                local row = GetGlassBase(rowContainer)
+
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, -54, 1, 0)
+                lbl.Position = UDim2.new(0, 14, 0, 0)
+                lbl.BackgroundTransparency = 1
+                lbl.Text = opts.Name or "Checkbox"
+                lbl.TextColor3 = theme.Text
+                lbl.Font = Enum.Font.Gotham
+                lbl.TextSize = 14
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.Parent = row
+
+                local box = Instance.new("Frame")
+                box.Size = UDim2.new(0, 20, 0, 20)
+                box.Position = UDim2.new(1, -34, 0.5, -10)
+                box.BackgroundColor3 = current and theme.Accent or theme.TertiaryBackground
+                box.Parent = row
+                local boxCorner = Instance.new("UICorner")
+                boxCorner.CornerRadius = UDim.new(0, 6)
+                boxCorner.Parent = box
+                local boxStroke = Instance.new("UIStroke")
+                boxStroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
+                boxStroke.Transparency = 0.6
+                boxStroke.Thickness = 1
+                boxStroke.Parent = box
+
+                local check = Instance.new("ImageLabel")
+                check.Size = UDim2.new(0, 14, 0, 14)
+                check.Position = UDim2.new(0.5, -7, 0.5, -7)
+                check.BackgroundTransparency = 1
+                check.ImageTransparency = current and 0 or 1
+                MacUI.ApplyIcon(check, "check")
+                check.ImageColor3 = Color3.new(1, 1, 1)
+                check.Parent = box
+
+                local function SetState(val, silent)
+                    current = val
+                    if not silent then
+                        PlaySFX("Check", val and 1.15 or 0.9, 0.45)
+                    end
+                    MacUI.Tween(box, {Time = 0.18}, {BackgroundColor3 = val and theme.Accent or theme.TertiaryBackground})
+                    MacUI.Tween(check, {Time = 0.15}, {ImageTransparency = val and 0 or 1})
+                    if val then MacUI.PressSquish(box, 0.85, 0.14) end
+                    if opts.Callback then
+                        local ok, err = pcall(opts.Callback, val)
+                        if not ok then warn("[MacUI] Callback error:", err) end
+                    end
+                    if flag then MacUI.Config.Data[flag] = val end
+                end
+
+                TrackConnection(row.MouseEnter:Connect(function()
+                    PlaySFX("Hover", 1.35, 0.18)
+                end))
+                TrackConnection(row.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        SetState(not current)
+                    end
+                end))
+
+                if hasSaved and opts.Callback then
+                    local ok, err = pcall(opts.Callback, current)
+                    if not ok then warn("[MacUI] Callback error:", err) end
+                end
+
+                table.insert(Window.Elements, {Type = "Checkbox", Name = opts.Name, Flag = flag, Set = SetState, Object = rowContainer})
+                return {Set = SetState, Get = function() return current end}
+            end
+
+            -- RadioGroup — single pick from a fixed, always-visible list of options (as
+            -- opposed to Dropdown, which hides the list until opened). Pass Options = {...}
+            -- and optional CurrentOption; Callback(option) fires on every change.
+            function Section:CreateRadioGroup(opts)
+                opts = opts or {}
+                local flag = opts.Flag or opts.Name
+                local options = opts.Options or {}
+                local current = opts.CurrentOption or options[1]
+                local hasSaved = flag ~= nil and type(MacUI.Config.Data[flag]) == "string"
+                if hasSaved then current = MacUI.Config.Data[flag] end
+
+                local groupContainer = CreateGlassFrame(sectionContent, {
+                    Radius = 10,
+                    Transparency = 0.35,
+                    Color = theme.TertiaryBackground
+                })
+                groupContainer.Size = UDim2.new(1, 0, 0, (#options * 36) + 12)
+                local groupBase = GetGlassBase(groupContainer)
+
+                local layout = Instance.new("UIListLayout")
+                layout.Padding = UDim.new(0, 2)
+                layout.SortOrder = Enum.SortOrder.LayoutOrder
+                layout.Parent = groupBase
+
+                local pad = Instance.new("UIPadding")
+                pad.PaddingTop = UDim.new(0, 6)
+                pad.PaddingBottom = UDim.new(0, 6)
+                pad.Parent = groupBase
+
+                local dots = {}
+                local SetState
+
+                local function BuildOption(optName, index)
+                    local row = Instance.new("TextButton")
+                    row.Size = UDim2.new(1, 0, 0, 32)
+                    row.BackgroundTransparency = 1
+                    row.Text = ""
+                    row.AutoButtonColor = false
+                    row.LayoutOrder = index
+                    row.Parent = groupBase
+
+                    local ring = Instance.new("Frame")
+                    ring.Size = UDim2.new(0, 18, 0, 18)
+                    ring.Position = UDim2.new(0, 14, 0.5, -9)
+                    ring.BackgroundTransparency = 1
+                    ring.Parent = row
+                    local ringCorner = Instance.new("UICorner")
+                    ringCorner.CornerRadius = UDim.new(1, 0)
+                    ringCorner.Parent = ring
+                    local ringStroke = Instance.new("UIStroke")
+                    ringStroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
+                    ringStroke.Transparency = 0.5
+                    ringStroke.Thickness = 1.3
+                    ringStroke.Parent = ring
+
+                    local dot = Instance.new("Frame")
+                    dot.Size = UDim2.new(0, 10, 0, 10)
+                    dot.Position = UDim2.new(0.5, -5, 0.5, -5)
+                    dot.BackgroundColor3 = theme.Accent
+                    dot.BackgroundTransparency = (optName == current) and 0 or 1
+                    dot.Parent = ring
+                    local dotCorner = Instance.new("UICorner")
+                    dotCorner.CornerRadius = UDim.new(1, 0)
+                    dotCorner.Parent = dot
+                    dots[optName] = dot
+
+                    local lbl = Instance.new("TextLabel")
+                    lbl.Size = UDim2.new(1, -46, 1, 0)
+                    lbl.Position = UDim2.new(0, 40, 0, 0)
+                    lbl.BackgroundTransparency = 1
+                    lbl.Text = optName
+                    lbl.TextColor3 = theme.Text
+                    lbl.Font = Enum.Font.Gotham
+                    lbl.TextSize = 14
+                    lbl.TextXAlignment = Enum.TextXAlignment.Left
+                    lbl.Parent = row
+
+                    TrackConnection(row.MouseEnter:Connect(function()
+                        PlaySFX("Hover", 1.3, 0.18)
+                    end))
+                    TrackConnection(row.MouseButton1Click:Connect(function()
+                        SetState(optName)
+                    end))
+                end
+
+                SetState = function(val, silent)
+                    current = val
+                    if not silent then
+                        PlaySFX("Radio", 1.05, 0.4)
+                    end
+                    for optName, dot in pairs(dots) do
+                        MacUI.Tween(dot, {Time = 0.15}, {BackgroundTransparency = (optName == val) and 0 or 1})
+                    end
+                    if opts.Callback then
+                        local ok, err = pcall(opts.Callback, val)
+                        if not ok then warn("[MacUI] Callback error:", err) end
+                    end
+                    if flag then MacUI.Config.Data[flag] = val end
+                end
+
+                for i, optName in ipairs(options) do
+                    BuildOption(optName, i)
+                end
+
+                if hasSaved and opts.Callback then
+                    local ok, err = pcall(opts.Callback, current)
+                    if not ok then warn("[MacUI] Callback error:", err) end
+                end
+
+                table.insert(Window.Elements, {Type = "RadioGroup", Name = opts.Name, Flag = flag, Set = SetState, Object = groupContainer})
+                return {Set = SetState, Get = function() return current end}
+            end
+
+            -- ProgressBar — a static readout (not a user input) for things like download /
+            -- farming / loading progress. Call :Set(0-100) to animate the fill; a Progress
+            -- chime plays once when it reaches 100.
+            function Section:CreateProgressBar(opts)
+                opts = opts or {}
+                local current = math.clamp(opts.CurrentValue or 0, 0, 100)
+                local firedComplete = false
+
+                local container = CreateGlassFrame(sectionContent, {
+                    Radius = 10,
+                    Transparency = 0.35,
+                    Color = theme.TertiaryBackground
+                })
+                container.Size = UDim2.new(1, 0, 0, 52)
+                local base = GetGlassBase(container)
+
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, -56, 0, 18)
+                lbl.Position = UDim2.new(0, 14, 0, 7)
+                lbl.BackgroundTransparency = 1
+                lbl.Text = opts.Name or "Progress"
+                lbl.TextColor3 = theme.Text
+                lbl.Font = Enum.Font.Gotham
+                lbl.TextSize = 14
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.Parent = base
+
+                local pctLbl = Instance.new("TextLabel")
+                pctLbl.Size = UDim2.new(0, 40, 0, 18)
+                pctLbl.Position = UDim2.new(1, -54, 0, 7)
+                pctLbl.BackgroundTransparency = 1
+                pctLbl.Text = math.floor(current) .. "%"
+                pctLbl.TextColor3 = theme.SecondaryText
+                pctLbl.Font = Enum.Font.Gotham
+                pctLbl.TextSize = 12
+                pctLbl.TextXAlignment = Enum.TextXAlignment.Right
+                pctLbl.Parent = base
+
+                local track = Instance.new("Frame")
+                track.Size = UDim2.new(1, -28, 0, 8)
+                track.Position = UDim2.new(0, 14, 0, 32)
+                track.BackgroundColor3 = theme.Background
+                track.Parent = base
+                local trackCorner = Instance.new("UICorner")
+                trackCorner.CornerRadius = UDim.new(1, 0)
+                trackCorner.Parent = track
+
+                local fill = Instance.new("Frame")
+                fill.Size = UDim2.new(current / 100, 0, 1, 0)
+                fill.BackgroundColor3 = theme.Accent
+                fill.Parent = track
+                local fillCorner = Instance.new("UICorner")
+                fillCorner.CornerRadius = UDim.new(1, 0)
+                fillCorner.Parent = fill
+
+                local function SetValue(val)
+                    current = math.clamp(val, 0, 100)
+                    pctLbl.Text = math.floor(current) .. "%"
+                    MacUI.Tween(fill, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
+                        Size = UDim2.new(current / 100, 0, 1, 0)
+                    })
+                    if current >= 100 and not firedComplete then
+                        firedComplete = true
+                        PlaySFX("Progress", 1.0, 0.5)
+                    elseif current < 100 then
+                        firedComplete = false
+                    end
+                end
+
+                table.insert(Window.Elements, {Type = "ProgressBar", Name = opts.Name, Set = SetValue, Object = container})
+                return {Set = SetValue, Get = function() return current end}
             end
 
             -- Slider
