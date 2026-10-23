@@ -1,7 +1,16 @@
 --[[
-    MacUI v2.4.0
+    MacUI v2.4.1
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.4.1:
+      - Slider knob is now a taller pill (10x22, was a 16x16 circle) instead of a plain
+        round dot, closer to the real macOS thumb shape.
+      - Slider knob goes liquid-glass while actually held: grabbing it tints it with the
+        theme's Glass color + GlassTransparency and fades in a sheen highlight + a themed
+        edge stroke (grows to 13x28 at the same time); releasing tweens it straight back to
+        flat solid white at its resting 10x22 size. Purely visual - Flag/Callback/Set/Get
+        behavior is unchanged.
 
     v2.4.0:
       - New Halloween theme (MacUI.Themes.Halloween): jack-o'-lantern orange + witching-hour
@@ -48,7 +57,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.4.0",
+    Version = "2.4.1",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -3239,15 +3248,46 @@ function MacUI:CreateWindow(options)
                 fillCorner.CornerRadius = UDim.new(1, 0)
                 fillCorner.Parent = fill
 
+                -- Knob: a tall pill (macOS-style thumb) rather than a plain circle. Plain
+                -- solid white at rest; while actually grabbed it turns into a mini 3-layer
+                -- liquid-glass piece (tint + sheen + stroke) matching the rest of the UI,
+                -- then reverts to flat white the moment it's released.
+                local KNOB_W, KNOB_H = 10, 22
+                local KNOB_W_GRAB, KNOB_H_GRAB = 13, 28
+
                 local knob = Instance.new("Frame")
-                knob.Size = UDim2.new(0, 16, 0, 16)
-                knob.Position = UDim2.new((current - min) / (max - min), -8, 0.5, -8)
+                knob.AnchorPoint = Vector2.new(0.5, 0.5)
+                knob.Size = UDim2.new(0, KNOB_W, 0, KNOB_H)
+                knob.Position = UDim2.new((current - min) / (max - min), 0, 0.5, 0)
                 knob.BackgroundColor3 = Color3.new(1, 1, 1)
+                knob.BackgroundTransparency = 0
+                knob.ZIndex = 2
                 knob.Parent = track
 
                 local knobCorner = Instance.new("UICorner")
                 knobCorner.CornerRadius = UDim.new(1, 0)
                 knobCorner.Parent = knob
+
+                -- Glass sheen (fades in only while grabbed)
+                local knobSheen = Instance.new("Frame")
+                knobSheen.Name = "KnobSheen"
+                knobSheen.Size = UDim2.new(1, 0, 0.45, 0)
+                knobSheen.Position = UDim2.new(0, 0, 0, 0)
+                knobSheen.BackgroundColor3 = Color3.new(1, 1, 1)
+                knobSheen.BackgroundTransparency = 1
+                knobSheen.BorderSizePixel = 0
+                knobSheen.ZIndex = 3
+                knobSheen.Parent = knob
+                local knobSheenCorner = Instance.new("UICorner")
+                knobSheenCorner.CornerRadius = UDim.new(1, 0)
+                knobSheenCorner.Parent = knobSheen
+
+                -- Glass edge (fades in only while grabbed)
+                local knobStroke = Instance.new("UIStroke")
+                knobStroke.Color = theme.Border or Color3.fromRGB(255, 255, 255)
+                knobStroke.Transparency = 1
+                knobStroke.Thickness = 1.1
+                knobStroke.Parent = knob
 
                 local sliding = false
                 local lastTickVal = current
@@ -3257,7 +3297,7 @@ function MacUI:CreateWindow(options)
                     current = val
                     local alpha = (val - min) / (max - min)
                     fill.Size = UDim2.new(alpha, 0, 1, 0)
-                    knob.Position = UDim2.new(alpha, -8, 0.5, -8)
+                    knob.Position = UDim2.new(alpha, 0, 0.5, 0)
                     valueLbl.Text = tostring(val)
                     if changed and not silent then
                         -- Soft tick only when the stepped value actually moves
@@ -3277,7 +3317,14 @@ function MacUI:CreateWindow(options)
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         sliding = true
                         PlaySFX("Grab", 1.15, 0.35)
-                        MacUI.Tween(knob, {Time = 0.14, EasingStyle = Enum.EasingStyle.Back}, {Size = UDim2.new(0, 20, 0, 20)})
+                        -- Grow + go liquid-glass: translucent tint, sheen and edge fade in.
+                        MacUI.Tween(knob, {Time = 0.14, EasingStyle = Enum.EasingStyle.Back}, {
+                            Size = UDim2.new(0, KNOB_W_GRAB, 0, KNOB_H_GRAB),
+                            BackgroundColor3 = theme.Glass or theme.TertiaryBackground,
+                            BackgroundTransparency = theme.GlassTransparency or MacUI.GlassStyle.Transparency
+                        })
+                        MacUI.Tween(knobSheen, {Time = 0.16}, {BackgroundTransparency = 0.55})
+                        MacUI.Tween(knobStroke, {Time = 0.16}, {Transparency = theme.BorderTransparency or 0.4})
                         local rel = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
                         Update(min + rel * (max - min))
                     end
@@ -3292,7 +3339,14 @@ function MacUI:CreateWindow(options)
                     if sliding and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                         sliding = false
                         PlaySFX("Release", 1.1, 0.32)
-                        MacUI.Tween(knob, {Time = 0.18, EasingStyle = Enum.EasingStyle.Quint}, {Size = UDim2.new(0, 16, 0, 16)})
+                        -- Shrink + back to flat solid white, glass layers fade back out.
+                        MacUI.Tween(knob, {Time = 0.18, EasingStyle = Enum.EasingStyle.Quint}, {
+                            Size = UDim2.new(0, KNOB_W, 0, KNOB_H),
+                            BackgroundColor3 = Color3.new(1, 1, 1),
+                            BackgroundTransparency = 0
+                        })
+                        MacUI.Tween(knobSheen, {Time = 0.2}, {BackgroundTransparency = 1})
+                        MacUI.Tween(knobStroke, {Time = 0.2}, {Transparency = 1})
                     end
                 end))
 

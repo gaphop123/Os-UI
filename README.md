@@ -10,15 +10,20 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.4.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images + Halloween
+-- macOS Style (v2.4.1) — Golden Gate UI + Liquid Glass + SFX + Theme Images + Halloween
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.4.0)
+## 🍎 MacUI (v2.4.1)
 
 Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, a built-in **Halloween theme** with its own FX and SFX, and rich **UI sound effects**.
+
+### Changelog (v2.4.1)
+
+- **Slider knob redesign** — the thumb is now a taller pill (10×22 at rest) instead of a 16×16 circle, closer to the real macOS slider thumb.
+- **Slider knob goes liquid-glass while held** — grab it and it tints to the theme's `Glass` color + `GlassTransparency`, with a fading-in sheen highlight and a themed edge stroke, growing to 13×28 at the same time. Let go and it tweens straight back to flat solid white at its resting size. Purely visual; `Flag` / `Callback` / `Set` / `Get` behavior is unchanged.
 
 ### Changelog (v2.4.0)
 
