@@ -10,15 +10,24 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.3.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images
+-- macOS Style (v2.4.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images + Halloween
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.3.0)
+## 🍎 MacUI (v2.4.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, and rich **UI sound effects**.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, a built-in **Halloween theme** with its own FX and SFX, and rich **UI sound effects**.
+
+### Changelog (v2.4.0)
+
+- **🎃 Halloween theme** — `Theme = "Halloween"` (jack-o'-lantern orange + witching-hour purple on near-black). Selecting it is fully automatic:
+  - Drifting 🦇/👻/🎃/🕸️ glyphs appear behind the window content *and* the boot screen, and are removed the instant you switch to any other theme — nothing to wire up yourself.
+  - A set of UI sounds are swapped for spookier ones purely by theme (see **Sound Effects** below) — every other theme's sounds are completely untouched.
+  - The boot-screen logo and progress bar pick up the theme's accent color.
+- **3 new elements**: `CreateCheckbox`, `CreateRadioGroup`, `CreateProgressBar` — same `Flag` / Config / `Set` / `Get` / `Callback` contract as every existing control.
+- **8 new SFX keys**: `Check`, `Radio`, `Rating`, `Progress`, `Expand`, `Collapse`, `Confirm`, `Stepper` (plus the Halloween-only `SpookyBoot`, `GhostWhoosh`, `CauldronBubble`, `WitchCackle`, `BatFlap`, `Thunder`).
 
 ### Changelog (v2.3.0)
 
@@ -202,11 +211,40 @@ Built-in:
 | `Monochrome`            |         | Black / white |
 | `Sunset`                |         | Orange–coral |
 | `Arctic`                |         | Light icy blue |
+| `Halloween`             |         | 🎃 Jack-o'-lantern orange + purple — see below |
 
 ```lua
 MacUI:SetTheme("Golden Gate")
 MacUI:SetTheme("Nord")
 ```
+
+#### 🎃 Halloween theme
+
+`Halloween` is a regular theme you can set via `CreateWindow({ Theme = "Halloween" })` or `MacUI:SetTheme("Halloween")`/the Settings dropdown — but unlike the others, switching into (or out of) it also toggles two extra systems automatically:
+
+```lua
+local Window = MacUI:CreateWindow({
+    Name = "Spooky Hub",
+    Theme = "Halloween",   -- bats/ghosts/pumpkins + themed SFX turn on immediately
+})
+
+-- Switching later works the same way, including undoing it:
+MacUI:SetTheme("Halloween")   -- FX + SFX turn on
+MacUI:SetTheme("Golden Gate") -- FX removed, SFX back to normal — no cleanup needed
+```
+
+- **FX**: `MacUI.AddHalloweenFX(parent, { Count = 5, Speed = 7 })` spawns slow-drifting 🦇/👻/🎃/🕸️ text glyphs (no image assets, so no extra network calls). `CreateWindow` and `Window:ApplyTheme` call this for you; `MacUI.RemoveHalloweenFX(handle)` tears one down. You only need to call either yourself if you're adding the effect to your *own* custom frame.
+- **SFX**: while `MacUI.CurrentTheme == "Halloween"`, `PlaySFX`/`MacUI.PlaySound` transparently substitute a few sounds via `MacUI.ThemeSoundOverrides.Halloween`:
+
+  | Normal sound | Halloween plays instead |
+  |---------------|--------------------------|
+  | `Boot`        | `SpookyBoot` (eerie creak) |
+  | `Open` / `Close` / `Restore` / `Notify` | `GhostWhoosh` |
+  | `Slider`      | `CauldronBubble` |
+  | `Success`     | `WitchCackle` |
+  | `Deny` / `Error` | `Thunder` |
+
+  Every other theme ignores this table entirely, so nothing about their sounds changes. You can add your own theme to `MacUI.ThemeSoundOverrides` the same way.
 
 #### Custom Themes
 
@@ -308,11 +346,37 @@ Section:CreateParagraph({
     Title = "Info",
     Content = "Longer description that wraps."
 })
+
+-- Checkbox — square multi-select sibling to Toggle (e.g. "pick any of these")
+local Checkbox = Section:CreateCheckbox({
+    Name = "Accept Risks",
+    CurrentValue = false,
+    Flag = "AcceptRisks",
+    Callback = function(val) end
+})
+Checkbox:Set(true)
+
+-- RadioGroup — always-visible single pick (vs. Dropdown's hidden list)
+local Radio = Section:CreateRadioGroup({
+    Name = "Farm Mode",
+    Options = {"Passive", "Balanced", "Aggressive"},
+    CurrentOption = "Balanced",
+    Flag = "FarmMode",
+    Callback = function(opt) end
+})
+Radio:Set("Aggressive")
+
+-- ProgressBar — non-interactive readout; call :Set(0-100) to animate the fill
+local Progress = Section:CreateProgressBar({
+    Name = "Dungeon Clear",
+    CurrentValue = 0
+})
+Progress:Set(72)   -- plays the "Progress" chime once it reaches 100
 ```
 
 ---
 
-### Callback reference (v2.3.0)
+### Callback reference (v2.4.0)
 
 All control callbacks are wrapped in `pcall` — a throw inside your function only logs a warning; it never breaks the UI.
 
@@ -326,6 +390,9 @@ All control callbacks are wrapped in `pcall` — a throw inside your function on
 | **Keybind** | `OnChange` | `(Enum.KeyCode)` | User finishes rebinding to a new key |
 | **ColorPicker** | `Callback` | `(Color3)` | Color changes while dragging the SV board or hue strip |
 | **SegmentedControl** | `Callback` | `(string)` | A different segment is selected |
+| **Checkbox** | `Callback` | `(boolean)` | User clicks the box, or `Set(val)` without the silent flag |
+| **RadioGroup** | `Callback` | `(string)` | User picks a different option, or `Set(opt)` without the silent flag |
+| **ProgressBar** | *(none)* | — | Display-only; `Set(0-100)` animates the fill and plays `Progress` once at 100 |
 | **Button** | `Callback` | *(none)* | Click |
 | **Key System** | `onSuccess` | *(none)* | Correct key entered (modal closes) **or** a still-valid session already exists |
 | **Key System** | `onFail` | `(reason: string)` | `"invalid_key"` (modal stays open) or `"closed"` (user hit ×) |
@@ -397,11 +464,16 @@ MacUI.SFXVolume = 0
 MacUI.PlaySound("Click")           -- name, optional pitch, optional volumeMul
 MacUI.PlaySound("Success", 1.1, 0.8)
 
--- Built-in sound keys (v2.3.0)
+-- Built-in sound keys (v2.4.0)
 -- Click, Hover, ToggleOn, ToggleOff, Success, Error,
 -- Notify, Boot, Dock, Open, Close, Tab, Type, Slider,
 -- Minimize, Maximize, Restore, Drag, Switch, Copy, Deny,
--- Focus, Dropdown, Segment, Grab, Release, Search, Color
+-- Focus, Dropdown, Segment, Grab, Release, Search, Color,
+-- Check, Radio, Rating, Progress, Expand, Collapse, Confirm, Stepper
+--
+-- Halloween-only (never play unless MacUI.CurrentTheme == "Halloween" — see Halloween
+-- theme section above for how/when these are substituted in automatically):
+-- SpookyBoot, GhostWhoosh, CauldronBubble, WitchCackle, BatFlap, Thunder
 ```
 
 Sounds fire automatically on:
@@ -411,16 +483,18 @@ Sounds fire automatically on:
 - Dock tab selection (`Tab` + dock bounce); spam-clicks during the 0.4s cooldown play a quiet `Deny`
 - Buttons (hover + grab on press + click/release)
 - Toggles (hover, grab, on / off)
+- **Checkbox** check / uncheck; **RadioGroup** selection; **ProgressBar** reaching 100%
 - **Slider** grab → ticks while dragging (pitch follows value) → release
 - **Dropdown** open + option select
 - **Segmented control** selection
 - **Input** focus + typing ticks (`Focus` / `Type`)
 - **Color picker** open / close; **Search** panel open / close
-- Theme switching (`MacUI:SetTheme`, including from the Settings dropdown — silent on the window's initial boot theme)
+- Theme switching (`MacUI:SetTheme`, including from the Settings dropdown — silent on the window's initial boot theme); switching to/from **Halloween** additionally swaps several of the sounds above for spookier ones (see Halloween theme section)
 - Key system: accept / reject / closing the modal / a submit blocked by the cooldown / copying a key or key-site link
 - Window open
+- Drifting bats in the Halloween theme each play a quiet `BatFlap` as they change direction
 
-Reduce Motion mutes all SFX. Settings tab includes an **SFX Volume** slider.
+Reduce Motion mutes all SFX (including Halloween FX, which simply don't spawn). Settings tab includes an **SFX Volume** slider.
 
 ---
 
