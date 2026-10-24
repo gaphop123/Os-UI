@@ -1,7 +1,20 @@
 --[[
-    MacUI v2.5.0
+    MacUI v2.6.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.6.0:
+      - Tahoe Glass refresh: a richer four-part glass surface adds a refractive edge,
+        a color-aware inner glow, and an optional animated light sweep without relying
+        on unsupported blur or blend modes. Use MacUI:SetGlassStyle({ Tahoe = false })
+        to return to the classic 3-layer treatment.
+      - Two new palettes: Tahoe Dawn (cool, airy glass) and Golden Gate Dawn (warm fog
+        with bridge-gold highlights). Both are fully compatible with live SetTheme().
+      - New native controls: CreateStepper, CreateRating, and CreateCallout. They use
+        the same Set/Get, Flag/config, Callback and reduced-motion conventions as the
+        rest of the library.
+      - New interaction feedback: springy stepper/rating selections, progress sheen,
+        and dedicated Tick / Sparkle / Callout sound hooks.
 
     v2.5.0:
       - Collapsible sections: Tab:CreateSection now also accepts a table
@@ -74,7 +87,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.5.0",
+    Version = "2.6.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -95,7 +108,12 @@ local MacUI = {
         Shadow = true,
         ShadowImage = "rbxassetid://6014261993", -- override if this decal doesn't render for you
         Tint = Color3.fromRGB(30, 30, 35),
-        Layers = true
+        Layers = true,
+        -- Tahoe adds a refractive inner edge and a very subtle ambient sheen. It is
+        -- deliberately shader-free so it works in Roblox Studio and executors alike.
+        Tahoe = true,
+        TahoeEdgeTransparency = 0.72,
+        TahoeGlowTransparency = 0.91
     },
     -- Global SFX master volume (0–1). Set to 0 to mute all UI sounds.
     SFXVolume = 0.55
@@ -182,6 +200,9 @@ MacUI.Sounds = {
     Collapse   = "rbxassetid://9119713951",   -- collapsible section closes
     Confirm    = "rbxassetid://6026984224",   -- confirm / alert dialog accepted
     Stepper    = "rbxassetid://9119713951",   -- stepper +/- click
+    Tick       = "rbxassetid://6895079853",   -- low-key numeric / selection tick
+    Sparkle    = "rbxassetid://6026984224",   -- celebratory rating / completion chime
+    Callout    = "rbxassetid://9114076550",   -- informational callout appearance
 
     -- v2.4.0 — Halloween theme SFX. These only ever play while Theme == "Halloween",
     -- swapped in automatically by PlaySFX via MacUI.ThemeSoundOverrides below, so every
@@ -1102,6 +1123,56 @@ MacUI.Themes["Golden Gate"] = {
     Widget = Color3.fromRGB(24, 22, 20)
 }
 
+-- Golden Gate Dawn — softer morning fog with high-contrast bridge-gold controls.
+-- Designed for the newer Tahoe glass layers, but still looks correct with Tahoe disabled.
+MacUI.Themes["Golden Gate Dawn"] = {
+    Background = Color3.fromRGB(54, 44, 35),
+    SecondaryBackground = Color3.fromRGB(76, 62, 47),
+    TertiaryBackground = Color3.fromRGB(94, 76, 57),
+    Text = Color3.fromRGB(255, 248, 234),
+    SecondaryText = Color3.fromRGB(220, 197, 165),
+    Accent = Color3.fromRGB(255, 184, 86),
+    Border = Color3.fromRGB(255, 238, 202),
+    BorderTransparency = 0.56,
+    Glass = Color3.fromRGB(118, 91, 64),
+    GlassTransparency = 0.42,
+    Success = Color3.fromRGB(112, 218, 145),
+    Warning = Color3.fromRGB(255, 191, 83),
+    Danger = Color3.fromRGB(255, 111, 96),
+    Shadow = Color3.fromRGB(20, 13, 8),
+    Dock = Color3.fromRGB(66, 51, 38),
+    DockTransparency = 0.34,
+    IconColor = Color3.fromRGB(255, 245, 227),
+    TabInactive = Color3.fromRGB(209, 177, 138),
+    Sheen = Color3.fromRGB(255, 236, 196),
+    Widget = Color3.fromRGB(48, 38, 29)
+}
+
+-- Tahoe Dawn — cool, layered daylight glass inspired by the wide, luminous surfaces
+-- in the Tahoe visual language. It intentionally keeps text contrast strong in-game.
+MacUI.Themes["Tahoe Dawn"] = {
+    Background = Color3.fromRGB(30, 48, 78),
+    SecondaryBackground = Color3.fromRGB(54, 78, 115),
+    TertiaryBackground = Color3.fromRGB(72, 101, 143),
+    Text = Color3.fromRGB(247, 251, 255),
+    SecondaryText = Color3.fromRGB(198, 218, 241),
+    Accent = Color3.fromRGB(110, 203, 255),
+    Border = Color3.fromRGB(222, 245, 255),
+    BorderTransparency = 0.5,
+    Glass = Color3.fromRGB(113, 161, 211),
+    GlassTransparency = 0.48,
+    Success = Color3.fromRGB(106, 224, 163),
+    Warning = Color3.fromRGB(255, 201, 101),
+    Danger = Color3.fromRGB(255, 123, 144),
+    Shadow = Color3.fromRGB(8, 17, 35),
+    Dock = Color3.fromRGB(52, 79, 119),
+    DockTransparency = 0.36,
+    IconColor = Color3.fromRGB(241, 250, 255),
+    TabInactive = Color3.fromRGB(181, 211, 241),
+    Sheen = Color3.fromRGB(224, 249, 255),
+    Widget = Color3.fromRGB(37, 60, 96)
+}
+
 MacUI.Themes.Crimson = {
     Background = Color3.fromRGB(28, 16, 18),
     SecondaryBackground = Color3.fromRGB(40, 22, 26),
@@ -1443,6 +1514,80 @@ local function CreateGlassFrame(parent, props)
         })
         sheenGradient.Parent = sheen
 
+        -- Tahoe refinement: an inset refractive rim and faint accent bloom create the
+        -- "glass bending light" read without pretending Roblox supports real blur.
+        -- The layers are passive decoration, so they do not steal input from controls.
+        local useTahoe = props.Tahoe
+        if useTahoe == nil then useTahoe = MacUI.GlassStyle.Tahoe end
+        if useTahoe then
+            local edge = Instance.new("Frame")
+            edge.Name = "TahoeEdge"
+            edge.Size = UDim2.new(1, -4, 1, -4)
+            edge.Position = UDim2.new(0, 2, 0, 2)
+            edge.BackgroundColor3 = theme.Border or Color3.new(1, 1, 1)
+            edge.BackgroundTransparency = MacUI.GlassStyle.TahoeEdgeTransparency or 0.72
+            edge.BorderSizePixel = 0
+            edge.Active = false
+            edge.ZIndex = 4
+            edge.Parent = base
+            local edgeCorner = Instance.new("UICorner")
+            edgeCorner.CornerRadius = UDim.new(0, math.max(radius - 2, 2))
+            edgeCorner.Parent = edge
+            local edgeGradient = Instance.new("UIGradient")
+            edgeGradient.Name = "TahoeEdgeGradient"
+            edgeGradient.Rotation = 35
+            edgeGradient.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, theme.Sheen or Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(0.5, theme.Border or Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, theme.Accent or theme.Border or Color3.new(1, 1, 1))
+            })
+            edgeGradient.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.1),
+                NumberSequenceKeypoint.new(0.45, 0.82),
+                NumberSequenceKeypoint.new(1, 0.32)
+            })
+            edgeGradient.Parent = edge
+
+            local glow = Instance.new("Frame")
+            glow.Name = "TahoeGlow"
+            glow.Size = UDim2.new(1, 0, 0.42, 0)
+            glow.BackgroundColor3 = theme.Accent or theme.Sheen or Color3.new(1, 1, 1)
+            glow.BackgroundTransparency = MacUI.GlassStyle.TahoeGlowTransparency or 0.91
+            glow.BorderSizePixel = 0
+            glow.Active = false
+            glow.ZIndex = 4
+            glow.Parent = base
+            local glowCorner = Instance.new("UICorner")
+            glowCorner.CornerRadius = UDim.new(0, radius)
+            glowCorner.Parent = glow
+            local glowGradient = Instance.new("UIGradient")
+            glowGradient.Name = "TahoeGlowGradient"
+            glowGradient.Rotation = 90
+            glowGradient.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.12),
+                NumberSequenceKeypoint.new(1, 1)
+            })
+            glowGradient.Parent = glow
+
+            -- A single window-level sweep gives the hub a living-liquid feel without
+            -- starting an expensive perpetual animation on every individual control.
+            if props.TahoeMotion and not MacUI.Accessibility.ReducedMotion then
+                glow.Position = UDim2.new(0, 0, -0.38, 0)
+                local function SweepGlow()
+                    if not (glow and glow.Parent) then return end
+                    local targetY = glow:GetAttribute("_TahoeSweepDown") and -0.38 or 0.96
+                    glow:SetAttribute("_TahoeSweepDown", not glow:GetAttribute("_TahoeSweepDown"))
+                    local tween = MacUI.Tween(glow, {
+                        Time = 5.5,
+                        EasingStyle = Enum.EasingStyle.Sine,
+                        EasingDirection = Enum.EasingDirection.InOut
+                    }, {Position = UDim2.new(0, 0, targetY, 0)})
+                    if tween then tween.Completed:Connect(SweepGlow) end
+                end
+                task.delay(0.8, SweepGlow)
+            end
+        end
+
         -- Optional 4th layer: slow-drifting liquid blobs behind the tint (opt-in; see
         -- MacUI.AddMetaballs). Off by default since it's extra always-running tweens.
         if props.Metaballs then
@@ -1770,6 +1915,8 @@ function MacUI:CreateWindow(options)
     local acrylic = options.Acrylic ~= false
     local size = options.Size or UDim2.new(0, 760, 0, 500)
     local minSize = options.MinSize or Vector2.new(480, 320)
+    -- Window-only Tahoe sweep: deliberately opt-in so compact hubs stay lightweight.
+    local tahoeMotion = options.TahoeMotion == true
     local showBoot = options.Boot ~= false
     local useDock = options.Dock ~= false
     local configSaving = options.ConfigurationSaving
@@ -1803,7 +1950,8 @@ function MacUI:CreateWindow(options)
         Radius = 20,
         Transparency = acrylic and (theme.GlassTransparency or MacUI.GlassStyle.Transparency) or 0.08,
         Color = theme.Background,
-        Metaballs = useMetaballs -- opt-in: slow-drifting liquid blobs behind the window tint
+        Metaballs = useMetaballs, -- opt-in: slow-drifting liquid blobs behind the window tint
+        TahoeMotion = tahoeMotion
     })
     windowContainer.Name = "Window"
     windowContainer.Size = size
@@ -2301,6 +2449,13 @@ function MacUI:CreateWindow(options)
                 inst.PlaceholderColor3 = newTheme.SecondaryText
             end
         end
+        if inst:IsA("UIGradient") and inst.Name == "ProgressSheen" then
+            inst.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, newTheme.Accent),
+                ColorSequenceKeypoint.new(0.5, newTheme.Sheen or Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, newTheme.Accent)
+            })
+        end
         if inst.Name == "GlassBase" then
             local old = inst.BackgroundColor3
             if old == oldTheme.TertiaryBackground then inst.BackgroundColor3 = newTheme.TertiaryBackground
@@ -2315,6 +2470,20 @@ function MacUI:CreateWindow(options)
             end
             local sheen = inst:FindFirstChild("Sheen")
             if sheen then sheen.BackgroundColor3 = newTheme.Sheen or Color3.new(1, 1, 1) end
+            local tahoeEdge = inst:FindFirstChild("TahoeEdge")
+            if tahoeEdge then
+                tahoeEdge.BackgroundColor3 = newTheme.Border or Color3.new(1, 1, 1)
+                local edgeGradient = tahoeEdge:FindFirstChild("TahoeEdgeGradient")
+                if edgeGradient then
+                    edgeGradient.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, newTheme.Sheen or Color3.new(1, 1, 1)),
+                        ColorSequenceKeypoint.new(0.5, newTheme.Border or Color3.new(1, 1, 1)),
+                        ColorSequenceKeypoint.new(1, newTheme.Accent or newTheme.Border or Color3.new(1, 1, 1))
+                    })
+                end
+            end
+            local tahoeGlow = inst:FindFirstChild("TahoeGlow")
+            if tahoeGlow then tahoeGlow.BackgroundColor3 = newTheme.Accent or newTheme.Sheen or Color3.new(1, 1, 1) end
             local stroke = inst:FindFirstChild("GlassStroke")
             if stroke then
                 stroke.Color = newTheme.Border or Color3.fromRGB(255, 255, 255)
@@ -2362,6 +2531,20 @@ function MacUI:CreateWindow(options)
             if sheen then
                 sheen.BackgroundColor3 = t.Sheen or Color3.fromRGB(255, 255, 255)
             end
+            local tahoeEdge = winBase:FindFirstChild("TahoeEdge")
+            if tahoeEdge then
+                tahoeEdge.BackgroundColor3 = t.Border or Color3.new(1, 1, 1)
+                local edgeGradient = tahoeEdge:FindFirstChild("TahoeEdgeGradient")
+                if edgeGradient then
+                    edgeGradient.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, t.Sheen or Color3.new(1, 1, 1)),
+                        ColorSequenceKeypoint.new(0.5, t.Border or Color3.new(1, 1, 1)),
+                        ColorSequenceKeypoint.new(1, t.Accent or t.Border or Color3.new(1, 1, 1))
+                    })
+                end
+            end
+            local tahoeGlow = winBase:FindFirstChild("TahoeGlow")
+            if tahoeGlow then tahoeGlow.BackgroundColor3 = t.Accent or t.Sheen or Color3.new(1, 1, 1) end
         end
 
         -- Swap (or clear) the theme background image. Destroying the old holder first
@@ -3374,6 +3557,20 @@ function MacUI:CreateWindow(options)
                 local fillCorner = Instance.new("UICorner")
                 fillCorner.CornerRadius = UDim.new(1, 0)
                 fillCorner.Parent = fill
+                local fillGradient = Instance.new("UIGradient")
+                fillGradient.Name = "ProgressSheen"
+                fillGradient.Rotation = 0
+                fillGradient.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, theme.Accent),
+                    ColorSequenceKeypoint.new(0.5, theme.Sheen or Color3.new(1, 1, 1)),
+                    ColorSequenceKeypoint.new(1, theme.Accent)
+                })
+                fillGradient.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.16),
+                    NumberSequenceKeypoint.new(0.5, 0.02),
+                    NumberSequenceKeypoint.new(1, 0.16)
+                })
+                fillGradient.Parent = fill
 
                 local function SetValue(val)
                     current = math.clamp(val, 0, 100)
@@ -3381,6 +3578,12 @@ function MacUI:CreateWindow(options)
                     MacUI.Tween(fill, {Time = 0.35, EasingStyle = Enum.EasingStyle.Quint}, {
                         Size = UDim2.new(current / 100, 0, 1, 0)
                     })
+                    if not MacUI.Accessibility.ReducedMotion then
+                        fillGradient.Offset = Vector2.new(-1, 0)
+                        MacUI.Tween(fillGradient, {Time = 0.42, EasingStyle = Enum.EasingStyle.Quad}, {
+                            Offset = Vector2.new(1, 0)
+                        })
+                    end
                     if current >= 100 and not firedComplete then
                         firedComplete = true
                         PlaySFX("Progress", 1.0, 0.5)
@@ -4149,6 +4352,228 @@ function MacUI:CreateWindow(options)
                 end
 
                 return {Set = SetColor, Get = function() return current end}
+            end
+
+            -- Stepper — compact +/- numeric input for values where a slider would be
+            -- too imprecise. Supports Min/Max/Step, Flag config, Callback, Set and Get.
+            function Section:CreateStepper(opts)
+                opts = opts or {}
+                local flag = opts.Flag or opts.Name
+                local min = tonumber(opts.Min) or 0
+                local max = tonumber(opts.Max) or 100
+                local step = math.max(tonumber(opts.Step) or 1, 0.0001)
+                local current = tonumber(opts.CurrentValue) or min
+                local hasSaved = flag ~= nil and MacUI.Config.Data[flag] ~= nil
+                if hasSaved then current = tonumber(MacUI.Config.Data[flag]) or current end
+
+                local container = CreateGlassFrame(sectionContent, {Radius = 10, Transparency = 0.35, Color = theme.TertiaryBackground})
+                container.Size = UDim2.new(1, 0, 0, 46)
+                local base = GetGlassBase(container)
+
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, -156, 1, 0)
+                label.Position = UDim2.new(0, 14, 0, 0)
+                label.BackgroundTransparency = 1
+                label.Text = opts.Name or "Stepper"
+                label.TextColor3 = theme.Text
+                label.Font = Enum.Font.Gotham
+                label.TextSize = 14
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.Parent = base
+
+                local valueLabel = Instance.new("TextLabel")
+                valueLabel.Size = UDim2.new(0, 52, 1, 0)
+                valueLabel.Position = UDim2.new(1, -112, 0, 0)
+                valueLabel.BackgroundTransparency = 1
+                valueLabel.TextColor3 = theme.Text
+                valueLabel.Font = Enum.Font.GothamMedium
+                valueLabel.TextSize = 13
+                valueLabel.TextXAlignment = Enum.TextXAlignment.Center
+                valueLabel.Parent = base
+
+                local function MakeButton(symbol, x)
+                    local button = Instance.new("TextButton")
+                    button.Size = UDim2.new(0, 28, 0, 28)
+                    button.Position = UDim2.new(1, x, 0.5, -14)
+                    button.BackgroundColor3 = theme.SecondaryBackground
+                    button.BackgroundTransparency = 0.22
+                    button.Text = symbol
+                    button.TextColor3 = theme.Text
+                    button.Font = Enum.Font.GothamMedium
+                    button.TextSize = 18
+                    button.AutoButtonColor = false
+                    button.Parent = base
+                    local corner = Instance.new("UICorner")
+                    corner.CornerRadius = UDim.new(0, 8)
+                    corner.Parent = button
+                    TrackConnection(button.MouseEnter:Connect(function()
+                        MacUI.Tween(button, {Time = 0.12}, {BackgroundColor3 = theme.Accent, BackgroundTransparency = 0.14})
+                    end))
+                    TrackConnection(button.MouseLeave:Connect(function()
+                        MacUI.Tween(button, {Time = 0.12}, {BackgroundColor3 = theme.SecondaryBackground, BackgroundTransparency = 0.22})
+                    end))
+                    return button
+                end
+
+                local minus = MakeButton("−", -142)
+                local plus = MakeButton("+", -34)
+                local function Normalize(value)
+                    value = math.clamp(tonumber(value) or min, min, max)
+                    return math.floor(((value - min) / step) + 0.5) * step + min
+                end
+                local function SetValue(value, silent)
+                    current = Normalize(value)
+                    valueLabel.Text = string.format("%g", current) .. (opts.Suffix or "")
+                    if not silent then
+                        PlaySFX("Stepper", current >= max and 1.16 or 0.98, 0.36)
+                        MacUI.PulseScale(valueLabel, 1.08, 0.16)
+                        if opts.Callback then
+                            local ok, err = pcall(opts.Callback, current)
+                            if not ok then warn("[MacUI] Callback error:", err) end
+                        end
+                    end
+                    if flag then MacUI.Config.Data[flag] = current end
+                end
+                SetValue(current, true)
+                TrackConnection(minus.MouseButton1Click:Connect(function()
+                    MacUI.PressSquish(minus, 0.86, 0.14)
+                    SetValue(current - step)
+                end))
+                TrackConnection(plus.MouseButton1Click:Connect(function()
+                    MacUI.PressSquish(plus, 0.86, 0.14)
+                    SetValue(current + step)
+                end))
+                if hasSaved and opts.Callback then
+                    local ok, err = pcall(opts.Callback, current)
+                    if not ok then warn("[MacUI] Callback error:", err) end
+                end
+                table.insert(Window.Elements, {Type = "Stepper", Name = opts.Name, Flag = flag, Set = SetValue, Object = container})
+                return {Set = SetValue, Get = function() return current end}
+            end
+
+            -- Rating — touch-friendly star rating with hover preview and a springy commit.
+            function Section:CreateRating(opts)
+                opts = opts or {}
+                local flag = opts.Flag or opts.Name
+                local maximum = math.max(math.floor(tonumber(opts.Max) or 5), 1)
+                local current = math.clamp(math.floor(tonumber(opts.CurrentValue) or 0), 0, maximum)
+                local hasSaved = flag ~= nil and MacUI.Config.Data[flag] ~= nil
+                if hasSaved then current = math.clamp(math.floor(tonumber(MacUI.Config.Data[flag]) or current), 0, maximum) end
+
+                local container = CreateGlassFrame(sectionContent, {Radius = 10, Transparency = 0.35, Color = theme.TertiaryBackground})
+                container.Size = UDim2.new(1, 0, 0, 48)
+                local base = GetGlassBase(container)
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(0.42, 0, 1, 0)
+                label.Position = UDim2.new(0, 14, 0, 0)
+                label.BackgroundTransparency = 1
+                label.Text = opts.Name or "Rating"
+                label.TextColor3 = theme.Text
+                label.Font = Enum.Font.Gotham
+                label.TextSize = 14
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.Parent = base
+
+                local stars, preview = {}, nil
+                local function Paint(value)
+                    for index, star in ipairs(stars) do
+                        star.TextColor3 = index <= value and (theme.Warning or theme.Accent) or theme.SecondaryText
+                        star.TextTransparency = index <= value and 0 or 0.55
+                    end
+                end
+                local function SetValue(value, silent)
+                    current = math.clamp(math.floor(tonumber(value) or 0), 0, maximum)
+                    preview = nil
+                    Paint(current)
+                    if not silent then
+                        PlaySFX("Rating", 0.88 + (current / maximum) * 0.28, 0.42)
+                        PlaySFX("Sparkle", 1.0 + (current / maximum) * 0.12, 0.18)
+                        if stars[current] then MacUI.PulseScale(stars[current], 1.22, 0.22) end
+                        if opts.Callback then
+                            local ok, err = pcall(opts.Callback, current)
+                            if not ok then warn("[MacUI] Callback error:", err) end
+                        end
+                    end
+                    if flag then MacUI.Config.Data[flag] = current end
+                end
+                for i = 1, maximum do
+                    local star = Instance.new("TextButton")
+                    star.Size = UDim2.new(0, 28, 0, 32)
+                    star.Position = UDim2.new(1, -((maximum - i + 1) * 29) - 10, 0.5, -16)
+                    star.BackgroundTransparency = 1
+                    star.Text = "★"
+                    star.TextColor3 = theme.SecondaryText
+                    star.Font = Enum.Font.GothamBold
+                    star.TextSize = 23
+                    star.AutoButtonColor = false
+                    star.Parent = base
+                    stars[i] = star
+                    TrackConnection(star.MouseEnter:Connect(function()
+                        preview = i
+                        Paint(preview)
+                        PlaySFX("Hover", 1 + i * 0.03, 0.12)
+                    end))
+                    TrackConnection(star.MouseLeave:Connect(function()
+                        preview = nil
+                        Paint(current)
+                    end))
+                    TrackConnection(star.MouseButton1Click:Connect(function() SetValue(i) end))
+                end
+                Paint(current)
+                if hasSaved and opts.Callback then
+                    local ok, err = pcall(opts.Callback, current)
+                    if not ok then warn("[MacUI] Callback error:", err) end
+                end
+                table.insert(Window.Elements, {Type = "Rating", Name = opts.Name, Flag = flag, Set = SetValue, Object = container})
+                return {Set = SetValue, Get = function() return current end}
+            end
+
+            -- Callout — compact, color-coded status copy for onboarding, warnings or tips.
+            function Section:CreateCallout(opts)
+                opts = opts or {}
+                local style = string.lower(opts.Style or "Info")
+                local colors = {success = theme.Success, warning = theme.Warning, danger = theme.Danger, error = theme.Danger, info = theme.Accent}
+                local accent = colors[style] or theme.Accent
+                local container = CreateGlassFrame(sectionContent, {Radius = 11, Transparency = 0.28, Color = theme.TertiaryBackground})
+                container.Size = UDim2.new(1, 0, 0, opts.Content and 62 or 42)
+                local base = GetGlassBase(container)
+                local rail = Instance.new("Frame")
+                rail.Size = UDim2.new(0, 4, 1, -16)
+                rail.Position = UDim2.new(0, 8, 0, 8)
+                rail.BackgroundColor3 = accent
+                rail.BorderSizePixel = 0
+                rail.Parent = base
+                local railCorner = Instance.new("UICorner")
+                railCorner.CornerRadius = UDim.new(1, 0)
+                railCorner.Parent = rail
+                local title = Instance.new("TextLabel")
+                title.Size = UDim2.new(1, -32, 0, 20)
+                title.Position = UDim2.new(0, 22, 0, opts.Content and 7 or 11)
+                title.BackgroundTransparency = 1
+                title.Text = opts.Title or opts.Name or "Information"
+                title.TextColor3 = theme.Text
+                title.Font = Enum.Font.GothamMedium
+                title.TextSize = 13
+                title.TextXAlignment = Enum.TextXAlignment.Left
+                title.Parent = base
+                if opts.Content then
+                    local body = Instance.new("TextLabel")
+                    body.Size = UDim2.new(1, -32, 0, 28)
+                    body.Position = UDim2.new(0, 22, 0, 26)
+                    body.BackgroundTransparency = 1
+                    body.Text = opts.Content
+                    body.TextColor3 = theme.SecondaryText
+                    body.Font = Enum.Font.Gotham
+                    body.TextSize = 12
+                    body.TextWrapped = true
+                    body.TextXAlignment = Enum.TextXAlignment.Left
+                    body.TextYAlignment = Enum.TextYAlignment.Top
+                    body.Parent = base
+                end
+                if opts.Silent ~= true then PlaySFX("Callout", 1.0, 0.14) end
+                MacUI.PopIn(container, 0)
+                table.insert(Window.Elements, {Type = "Callout", Name = opts.Title or opts.Name, Object = container})
+                return {Destroy = function() if container.Parent then container:Destroy() end end}
             end
 
             -- Segmented Control
