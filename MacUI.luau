@@ -1,7 +1,24 @@
 --[[
-    MacUI v2.4.1
+    MacUI v2.5.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.5.0:
+      - Collapsible sections: Tab:CreateSection now also accepts a table
+        { Name, Collapsible = true, Collapsed = true/false }. Clicking the header
+        animates the section's height closed/open (clipped, not just hidden), spins a
+        chevron, and plays the existing Expand/Collapse SFX. Adds Section:Toggle(),
+        Section:SetCollapsed(state, silent), Section:IsCollapsed(). Plain-string
+        Tab:CreateSection("Name") calls are unchanged.
+      - Scalable hub: a bottom-right resize grip lets the window be resized live,
+        clamped to MinSize (and an optional new MaxSize Vector2). Off by default only
+        if CreateWindow is passed Resizable = false. MinSize now actually does
+        something (previously parsed but unused).
+      - Window:SetTitle(newName, newSubtitle) changes the hub's title/subtitle at any
+        time after CreateWindow, including while it's already open and in use.
+      - MacUI:Notify() now warns if called before any window has been created, and a
+        deferred check a few seconds after load warns if CreateWindow was never
+        reached at all - the most common "nothing shows up" report.
 
     v2.4.1:
       - Slider knob is now a taller pill (10x22, was a 16x16 circle) instead of a plain
@@ -57,7 +74,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.4.1",
+    Version = "2.5.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -1585,6 +1602,9 @@ end
 -- ============================================================
 function MacUI:Notify(options)
     options = options or {}
+    if #self.Windows == 0 then
+        warn("[MacUI] Notify() was called before any window has been created (MacUI:CreateWindow). The toast will still show, but double-check you meant to call this first.")
+    end
     local title = options.Title or "MacUI"
     local content = options.Content or ""
     local duration = options.Duration or 4
@@ -2155,6 +2175,81 @@ function MacUI:CreateWindow(options)
         end
     end))
 
+    -- ============================================================
+    -- RESIZE HANDLE (bottom-right grip) — drag to resize the hub live, clamped to
+    -- MinSize (and an optional MaxSize). Disabled while maximized.
+    -- ============================================================
+    local resizable = options.Resizable ~= false
+    if resizable then
+        local maxSizeOpt = options.MaxSize -- optional Vector2; unbounded if omitted
+
+        local resizeHandle = Instance.new("TextButton")
+        resizeHandle.Name = "ResizeHandle"
+        resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+        resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+        resizeHandle.BackgroundTransparency = 1
+        resizeHandle.Text = ""
+        resizeHandle.AutoButtonColor = false
+        resizeHandle.ZIndex = 30
+        resizeHandle.Parent = window
+
+        -- Three short diagonal strokes, classic resize-grip look. Decorative only.
+        local gripLines = {}
+        for i = 0, 2 do
+            local line = Instance.new("Frame")
+            line.Size = UDim2.new(0, 9, 0, 1.5)
+            line.AnchorPoint = Vector2.new(1, 1)
+            line.Position = UDim2.new(1, -3 - (i * 5), 1, -3 - (i * 5))
+            line.Rotation = -45
+            line.BackgroundColor3 = theme.SecondaryText
+            line.BackgroundTransparency = 0.4
+            line.BorderSizePixel = 0
+            line.ZIndex = 31
+            line.Parent = resizeHandle
+            table.insert(gripLines, line)
+        end
+
+        TrackConnection(resizeHandle.MouseEnter:Connect(function()
+            for _, line in ipairs(gripLines) do
+                MacUI.Tween(line, {Time = 0.12}, {BackgroundTransparency = 0})
+            end
+        end))
+        TrackConnection(resizeHandle.MouseLeave:Connect(function()
+            for _, line in ipairs(gripLines) do
+                MacUI.Tween(line, {Time = 0.12}, {BackgroundTransparency = 0.4})
+            end
+        end))
+
+        local isResizing, resizeStart, resizeStartSize = false, nil, nil
+        TrackConnection(resizeHandle.InputBegan:Connect(function(input)
+            if Window.IsMaximized then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                isResizing = true
+                resizeStart = input.Position
+                resizeStartSize = windowContainer.Size
+                PlaySFX("Drag", 1.2, 0.12)
+            end
+        end))
+        TrackConnection(UserInputService.InputChanged:Connect(function(input)
+            if isResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - resizeStart
+                local newW = math.max(minSize.X, resizeStartSize.X.Offset + delta.X)
+                local newH = math.max(minSize.Y, resizeStartSize.Y.Offset + delta.Y)
+                if maxSizeOpt then
+                    newW = math.min(newW, maxSizeOpt.X)
+                    newH = math.min(newH, maxSizeOpt.Y)
+                end
+                windowContainer.Size = UDim2.new(0, newW, 0, newH)
+            end
+        end))
+        TrackConnection(UserInputService.InputEnded:Connect(function(input)
+            if isResizing and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                isResizing = false
+                Window.OriginalSize = windowContainer.Size
+            end
+        end))
+    end
+
     -- Traffic light actions
     TrackConnection(closeBtn.MouseButton1Click:Connect(function()
         PlaySFX("Close", 0.95, 0.6)
@@ -2332,6 +2427,19 @@ function MacUI:CreateWindow(options)
     -- the person once with the key that brings it back; it won't repeat that notification
     -- on later hides. The same key (Window.ToggleKey, rebindable from Settings) calls this
     -- same method, so pressing it or clicking the dock-minimize button behave identically.
+    -- Changes the hub's title/subtitle after it's already up and running. Pass nil for
+    -- newSubtitle to leave the subtitle as-is; pass "" to clear it.
+    function Window:SetTitle(newName, newSubtitle)
+        if newName ~= nil then
+            name = newName
+        end
+        if newSubtitle ~= nil then
+            subtitle = newSubtitle
+        end
+        screenGui.Name = "MacUI_" .. name
+        titleLabel.Text = (subtitle ~= "") and (name .. "  —  " .. subtitle) or name
+    end
+
     function Window:Minimize()
         if self.IsMinimized then
             PlaySFX("Restore", 1.15, 0.5)
@@ -2727,29 +2835,69 @@ function MacUI:CreateWindow(options)
             Window:_UpdateDockWidth()
         end
 
-        function Tab:CreateSection(sectionName)
+        -- sectionOpts may be a plain string (back-compat: "My Section") or a table:
+        -- { Name = "My Section", Collapsible = true, Collapsed = false }
+        function Tab:CreateSection(sectionOpts)
+            local isTable = type(sectionOpts) == "table"
+            local sectionName = (isTable and sectionOpts.Name) or (not isTable and sectionOpts) or "Section"
+            local collapsible = isTable and sectionOpts.Collapsible == true
+            local startCollapsed = collapsible and sectionOpts.Collapsed == true
+
             local sectionFrame = Instance.new("Frame")
             sectionFrame.Size = UDim2.new(1, 0, 0, 0)
             sectionFrame.BackgroundTransparency = 1
             sectionFrame.AutomaticSize = Enum.AutomaticSize.Y
             sectionFrame.Parent = tabContent
 
+            -- Header is always a button (Active only when collapsible) so the title sits
+            -- in exactly the same spot whether or not the section can collapse.
+            local headerBtn = Instance.new("TextButton")
+            headerBtn.Size = UDim2.new(1, 0, 0, 22)
+            headerBtn.BackgroundTransparency = 1
+            headerBtn.Text = ""
+            headerBtn.AutoButtonColor = false
+            headerBtn.Active = collapsible
+            headerBtn.Selectable = false
+            headerBtn.Parent = sectionFrame
+
             local sectionTitle = Instance.new("TextLabel")
-            sectionTitle.Size = UDim2.new(1, 0, 0, 22)
+            sectionTitle.Size = collapsible and UDim2.new(1, -20, 0, 22) or UDim2.new(1, 0, 0, 22)
             sectionTitle.BackgroundTransparency = 1
             sectionTitle.Text = sectionName
             sectionTitle.TextColor3 = theme.SecondaryText
             sectionTitle.Font = Enum.Font.GothamMedium
             sectionTitle.TextSize = 13
             sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
-            sectionTitle.Parent = sectionFrame
+            sectionTitle.Parent = headerBtn
+
+            local chevron
+            if collapsible then
+                chevron = Instance.new("ImageLabel")
+                chevron.Size = UDim2.new(0, 14, 0, 14)
+                chevron.Position = UDim2.new(1, -16, 0.5, -7)
+                chevron.BackgroundTransparency = 1
+                chevron.Rotation = startCollapsed and -90 or 0
+                MacUI.ApplyIcon(chevron, "chevron-down")
+                chevron.ImageColor3 = theme.SecondaryText
+                chevron.Parent = headerBtn
+            end
+
+            -- Clipper masks sectionContent so collapsing can tween a height down to 0.
+            -- sectionContent itself keeps AutomaticSize, so its AbsoluteSize.Y always
+            -- reports the section's true, uncollapsed content height even while hidden.
+            local clipper = Instance.new("Frame")
+            clipper.Name = "Clipper"
+            clipper.Position = UDim2.new(0, 0, 0, 28)
+            clipper.Size = UDim2.new(1, 0, 0, 0)
+            clipper.BackgroundTransparency = 1
+            clipper.ClipsDescendants = true
+            clipper.Parent = sectionFrame
 
             local sectionContent = Instance.new("Frame")
             sectionContent.Size = UDim2.new(1, 0, 0, 0)
-            sectionContent.Position = UDim2.new(0, 0, 0, 28)
             sectionContent.BackgroundTransparency = 1
             sectionContent.AutomaticSize = Enum.AutomaticSize.Y
-            sectionContent.Parent = sectionFrame
+            sectionContent.Parent = clipper
 
             local secLayout = Instance.new("UIListLayout")
             secLayout.Padding = UDim.new(0, 10)
@@ -2759,8 +2907,64 @@ function MacUI:CreateWindow(options)
             local Section = {
                 Frame = sectionFrame,
                 Content = sectionContent,
-                Name = sectionName
+                Name = sectionName,
+                Collapsible = collapsible
             }
+
+            local collapsed = startCollapsed
+            local function ApplyHeight(animate)
+                local targetY = collapsed and 0 or sectionContent.AbsoluteSize.Y
+                if animate then
+                    MacUI.Tween(clipper, {Time = 0.28, EasingStyle = Enum.EasingStyle.Quint}, {
+                        Size = UDim2.new(1, 0, 0, targetY)
+                    })
+                else
+                    clipper.Size = UDim2.new(1, 0, 0, targetY)
+                end
+            end
+
+            -- Keep the clipper synced to content that's growing/shrinking (new controls
+            -- added later, a label's text changing height, etc.) while expanded.
+            TrackConnection(sectionContent:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                if not collapsed then
+                    clipper.Size = UDim2.new(1, 0, 0, sectionContent.AbsoluteSize.Y)
+                end
+            end))
+            ApplyHeight(false)
+
+            function Section:SetCollapsed(state, silent)
+                if not collapsible or collapsed == state then return end
+                collapsed = state
+                if not silent then
+                    PlaySFX(state and "Collapse" or "Expand", state and 0.95 or 1.05, 0.4)
+                end
+                ApplyHeight(true)
+                if chevron then
+                    MacUI.Tween(chevron, {Time = 0.25, EasingStyle = Enum.EasingStyle.Quint}, {
+                        Rotation = state and -90 or 0
+                    })
+                end
+            end
+
+            function Section:Toggle()
+                self:SetCollapsed(not collapsed)
+            end
+
+            function Section:IsCollapsed()
+                return collapsed
+            end
+
+            if collapsible then
+                TrackConnection(headerBtn.MouseButton1Click:Connect(function()
+                    Section:Toggle()
+                end))
+                TrackConnection(headerBtn.MouseEnter:Connect(function()
+                    MacUI.Tween(sectionTitle, {Time = 0.12}, {TextColor3 = theme.Text})
+                end))
+                TrackConnection(headerBtn.MouseLeave:Connect(function()
+                    MacUI.Tween(sectionTitle, {Time = 0.12}, {TextColor3 = theme.SecondaryText})
+                end))
+            end
 
             -- Button
             function Section:CreateButton(opts)
@@ -4522,5 +4726,14 @@ function MacUI:RunKeySystem(onReady, onFail)
     end
     self:PromptKeySystem(onReady, onFail)
 end
+
+-- Sanity check: the single most common "my script does nothing" report is that
+-- CreateWindow was never reached (wrong theme name erroring, key system never
+-- resolving, etc). Flag it loudly instead of leaving the hub silently absent.
+task.delay(8, function()
+    if #MacUI.Windows == 0 then
+        warn("[MacUI] No window has been created yet. If you expected a hub to be visible, make sure MacUI:CreateWindow(...) is actually being reached (it may be stuck behind a key system, or an earlier error stopped the script).")
+    end
+end)
 
 return MacUI

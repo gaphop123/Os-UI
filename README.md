@@ -10,15 +10,22 @@ A collection of lightweight, feature-rich Roblox UI libraries inspired by Window
 -- Windows 10 Style (v2.0.0)
 local WinUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"))()
 
--- macOS Style (v2.4.1) — Golden Gate UI + Liquid Glass + SFX + Theme Images + Halloween
+-- macOS Style (v2.5.0) — Golden Gate UI + Liquid Glass + SFX + Theme Images + Halloween
 local MacUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/MacUI.luau"))()
 ```
 
 ---
 
-## 🍎 MacUI (v2.4.1)
+## 🍎 MacUI (v2.5.0)
 
-Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, a built-in **Halloween theme** with its own FX and SFX, and rich **UI sound effects**.
+Gives your script a clean macOS aesthetic complete with a functional Dock, **3-layer liquid glass** on every control, optional **metaballs**, optional **PixelJSON theme background images** (with code-set transparency), boot sequence, Lucide icon support, an executor-ready config system, a drop-in Settings tab, a full **Key System**, **macOS-style battery indicator**, a built-in **Halloween theme** with its own FX and SFX, resizable/collapsible UI, and rich **UI sound effects**.
+
+### Changelog (v2.5.0)
+
+- **Collapsible sections** — `Tab:CreateSection` now also takes a table: `{ Name, Collapsible = true, Collapsed = true }`. The header becomes clickable, animates the section's content open/closed, spins a chevron, and plays the existing `Expand`/`Collapse` SFX. New: `Section:Toggle()`, `Section:SetCollapsed(state, silent)`, `Section:IsCollapsed()`. Plain `Tab:CreateSection("Name")` calls are unaffected.
+- **Scalable hub** — a grip in the window's bottom-right corner resizes it live, clamped to `MinSize` (and a new optional `MaxSize`). `MinSize` previously did nothing; now it does. Opt out with `Resizable = false`.
+- **`Window:SetTitle(newName, newSubtitle)`** — change the hub's title/subtitle any time after `CreateWindow`, even while it's already open. Pass `nil` to leave either argument as-is.
+- **"No window" warnings** — `MacUI:Notify()` now warns if called before any window exists, and a deferred check a few seconds after load warns if `CreateWindow` was never actually reached (the most common "nothing shows up" report).
 
 ### Changelog (v2.4.1)
 
@@ -177,7 +184,9 @@ end)
 | `Acrylic`              | boolean  | `true`                   | Background translucency |
 | `Metaballs`            | boolean  | `false`                  | Slow-drifting liquid blobs behind the window tint |
 | `Size`                 | UDim2    | `760×500`                | Initial UI bounds |
-| `MinSize`              | Vector2  | `480×320`                | Reserved for future resize clamping |
+| `MinSize`              | Vector2  | `480×320`                | Smallest size the resize grip will shrink the hub to |
+| `MaxSize`              | Vector2  | `nil` (unbounded)        | Largest size the resize grip will grow the hub to |
+| `Resizable`            | boolean  | `true`                   | Shows the bottom-right resize grip |
 | `ToggleKey`            | KeyCode  | `RightControl`           | Hides / shows the hub (rebindable from Settings) |
 | `ConfigurationSaving`  | table    | `{ Enabled = false }`    | `{ Enabled, Folder, File }` |
 
@@ -189,6 +198,13 @@ end)
 - First hide shows a one-time notification with the key that brings it back.
 - `Window:Toggle()` is an alias for `Window:Minimize()`.
 - `MacUI:SetTheme(name)` / Settings tab theme dropdown recolors **every** control already on the window.
+- `Window:SetTitle(newName, newSubtitle)` changes the title bar text at any point, even with the hub already open:
+  ```lua
+  Window:SetTitle("Admin Panel", "v2.5")   -- change both
+  Window:SetTitle("Renamed Hub")           -- leave subtitle as-is (pass nil for it)
+  Window:SetTitle(nil, "")                 -- keep the name, clear the subtitle
+  ```
+- Drag the grip in the window's bottom-right corner to resize the hub live (clamped to `MinSize`/`MaxSize` from `CreateWindow`). Disabled while maximized, or entirely via `Resizable = false`.
 
 ---
 
@@ -276,6 +292,29 @@ MacUI:RegisterTheme("Dracula", {
 
 MacUI:SetTheme("Dracula")
 ```
+
+---
+
+### Sections
+
+```lua
+-- Plain section (unchanged)
+local Main = Tab:CreateSection("Main Features")
+
+-- Collapsible section
+local Advanced = Tab:CreateSection({
+    Name = "Advanced",
+    Collapsible = true,
+    Collapsed = true   -- starts closed; omit (or false) to start open
+})
+
+Advanced:Toggle()                 -- flip open/closed, plays SFX
+Advanced:SetCollapsed(true)       -- force closed
+Advanced:SetCollapsed(false, true) -- force open, silently (no SFX)
+print(Advanced:IsCollapsed())
+```
+
+Controls are added the same way either way — `Section:CreateButton(...)`, `Section:CreateToggle(...)`, etc. all still work on a collapsible section.
 
 ---
 
