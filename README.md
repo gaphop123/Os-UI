@@ -1,4 +1,4 @@
-# MacUI v2.6 — Tahoe Liquid Glass for Roblox
+# MacUI v2.7 — Tahoe Liquid Glass for Roblox
 
 MacUI is a macOS-inspired Roblox UI library with Tahoe-style liquid glass, Golden Gate warmth, animated dock navigation, a boot screen, Lucide icons, settings/config support, and polished SFX.
 
@@ -10,7 +10,13 @@ local MacUI = loadstring(game:HttpGet(
 ))()
 ```
 
-## What’s new in v2.6
+## What’s new in v2.7
+
+- Touch-only players get a floating **Open UI** button after minimizing; PC and keyboard-capable players keep the existing hotkey flow.
+- A Welcome tab now opens first, with the player’s headshot, account name, device type, live player count, FPS, and ping.
+- Set `WelcomeTab = false` in `CreateWindow` if you want to opt out of the built-in dashboard.
+
+## v2.6 highlights
 
 - Tahoe glass refresh: a refractive inner edge, accent bloom, stronger specular depth, and an optional window-only light sweep.
 - Two new themes: `Tahoe Dawn` and `Golden Gate Dawn`.
@@ -27,7 +33,7 @@ local MacUI = loadstring(game:HttpGet(
 
 local Window = MacUI:CreateWindow({
     Name = "Tahoe Hub",
-    Subtitle = "v2.6",
+    Subtitle = "v2.7",
     Theme = "Tahoe Dawn",
     Boot = true,
     Dock = true,
@@ -107,6 +113,7 @@ Window:CreateSettingsTab()
 | `MinSize` / `MaxSize` | `480 × 320` / `nil` | Resize bounds |
 | `Resizable` | `true` | Show the bottom-right resize grip |
 | `ToggleKey` | `RightControl` | Hide/show key |
+| `WelcomeTab` | `true` | Open the built-in player/server dashboard first; set `false` to omit it |
 
 ## Themes
 
@@ -217,6 +224,10 @@ Window:SaveConfig()
 Window:LoadConfig()
 Window:Destroy()
 ```
+
+## Built-in search
+
+Every window now creates its title-bar search automatically. Click the magnifying-glass icon to filter controls in the active tab by name; click it again or press `Escape` to clear and close the search panel. `Window:CreateSearch()` remains available and is safe to call repeatedly.
 
 Sections can collapse cleanly without changing their content’s layout:
 

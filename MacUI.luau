@@ -1,7 +1,13 @@
 --[[
-    MacUI v2.6.0
+    MacUI v2.7.0
     A modern macOS-inspired Roblox UI library
     Liquid Glass + Golden Gate UI + Dock + Boot Sequence + Lucide Icons + Rich Animations + SFX
+
+    v2.7.0:
+      - Mobile-aware minimize: touch-only players receive a floating Open UI pill when
+        the hub is minimized, while keyboard/PC players keep the normal hotkey flow.
+      - Built-in Welcome tab opens first and shows the local player's avatar, account
+        name, device type, live server population, rendered FPS and network ping.
 
     v2.6.0:
       - Tahoe Glass refresh: a richer four-part glass surface adds a refractive edge,
@@ -87,7 +93,7 @@
 ]]
 
 local MacUI = {
-    Version = "2.6.0",
+    Version = "2.7.0",
     Themes = {},
     CurrentTheme = "Golden Gate",
     Windows = {},
@@ -129,6 +135,12 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local CoreGui = game:GetService("CoreGui")
+
+-- Touch-first clients have no practical keyboard shortcut to restore a minimized hub.
+-- A keyboard-connected tablet is treated as desktop-capable, so it keeps the normal flow.
+function MacUI:IsMobile()
+    return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
 
 -- Utility: Safe parent (executor vs studio)
 local function GetUIParent()
@@ -1922,6 +1934,7 @@ function MacUI:CreateWindow(options)
     local configSaving = options.ConfigurationSaving
     local useMetaballs = options.Metaballs == true
     local toggleKey = options.ToggleKey or Enum.KeyCode.RightControl
+    local isMobile = self:IsMobile()
 
     -- Executor config support: creates (or reuses) the save folder/file and schedules an
     -- automatic load once the window finishes opening.
@@ -2267,6 +2280,10 @@ function MacUI:CreateWindow(options)
         frame.Position = UDim2.new(0, x, 0, y)
     end
 
+    -- Mobile-only restore pill. It stays outside the window container so it remains
+    -- available after minimizing the hub; desktop users retain the keyboard shortcut.
+    local mobileOpenContainer = nil
+
     -- Window object
     local Window = {
         ScreenGui = screenGui,
@@ -2288,9 +2305,52 @@ function MacUI:CreateWindow(options)
         FlagElements = {},
         UseDock = useDock,
         ToggleKey = toggleKey,
+        IsMobile = isMobile,
         _NotifiedHidden = false,
         _PendingConfigLoad = pendingConfigLoad
     }
+
+    if isMobile then
+        mobileOpenContainer = CreateGlassFrame(screenGui, {
+            Radius = 16,
+            Transparency = 0.18,
+            Color = theme.Dock or theme.SecondaryBackground
+        })
+        mobileOpenContainer.Name = "MobileOpenUI"
+        mobileOpenContainer.Size = UDim2.new(0, 122, 0, 42)
+        mobileOpenContainer.Position = UDim2.new(0.5, 0, 1, -28)
+        mobileOpenContainer.AnchorPoint = Vector2.new(0.5, 1)
+        mobileOpenContainer.Visible = false
+        mobileOpenContainer.ZIndex = 100
+
+        local openBase = GetGlassBase(mobileOpenContainer)
+        openBase.ZIndex = 101
+        local openButton = Instance.new("TextButton")
+        openButton.Name = "OpenUIButton"
+        openButton.Size = UDim2.new(1, 0, 1, 0)
+        openButton.BackgroundTransparency = 1
+        openButton.Text = "Open UI"
+        openButton.TextColor3 = theme.Text
+        openButton.Font = Enum.Font.GothamMedium
+        openButton.TextSize = 14
+        openButton.AutoButtonColor = false
+        openButton.ZIndex = 102
+        openButton.Parent = openBase
+        Window.MobileOpenButton = mobileOpenContainer
+
+        TrackConnection(openButton.MouseButton1Click:Connect(function()
+            if Window.IsMinimized then
+                MacUI.PressSquish(openButton, 0.9, 0.16)
+                Window:Minimize()
+            end
+        end))
+        TrackConnection(openButton.MouseEnter:Connect(function()
+            MacUI.Tween(openBase, {Time = 0.14}, {BackgroundTransparency = 0.08})
+        end))
+        TrackConnection(openButton.MouseLeave:Connect(function()
+            MacUI.Tween(openBase, {Time = 0.14}, {BackgroundTransparency = 0.18})
+        end))
+    end
 
     -- Show/hide hotkey. Reads Window.ToggleKey live each press, so rebinding it from the
     -- Settings tab (see CreateSettingsTab) takes effect immediately without reconnecting.
@@ -2438,23 +2498,47 @@ function MacUI:CreateWindow(options)
     -- Border) for the same role in the new one. A control's own picked value (e.g. a
     -- ColorPicker's current color) essentially never exactly equals a theme color, so it's
     -- safely left alone.
-    local function RethemeInstance(inst, oldTheme, newTheme)
-        if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
-            if inst.TextColor3 == oldTheme.Text then
-                inst.TextColor3 = newTheme.Text
-            elseif inst.TextColor3 == (oldTheme.SecondaryText) then
-                inst.TextColor3 = newTheme.SecondaryText
-            end
-            if inst:IsA("TextBox") and inst.PlaceholderColor3 == oldTheme.SecondaryText then
-                inst.PlaceholderColor3 = newTheme.SecondaryText
+    -- Map only values that originated from the prior theme. This lets a user-selected
+    -- ColorPicker color (or any explicitly custom color) survive a global theme switch.
+    local THEME_COLOR_ROLES = {
+        "Background", "SecondaryBackground", "TertiaryBackground", "Text", "SecondaryText",
+        "Accent", "Border", "Glass", "Success", "Warning", "Danger", "Shadow", "Dock",
+        "IconColor", "TabInactive", "Sheen", "Widget"
+    }
+    local function MapThemeColor(color, oldTheme, newTheme)
+        for _, role in ipairs(THEME_COLOR_ROLES) do
+            if oldTheme[role] and newTheme[role] and color == oldTheme[role] then
+                return newTheme[role]
             end
         end
-        if inst:IsA("UIGradient") and inst.Name == "ProgressSheen" then
-            inst.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, newTheme.Accent),
-                ColorSequenceKeypoint.new(0.5, newTheme.Sheen or Color3.new(1, 1, 1)),
-                ColorSequenceKeypoint.new(1, newTheme.Accent)
-            })
+        return color
+    end
+
+    local function RethemeInstance(inst, oldTheme, newTheme)
+        if inst:IsA("GuiObject") then
+            inst.BackgroundColor3 = MapThemeColor(inst.BackgroundColor3, oldTheme, newTheme)
+            if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+                inst.TextColor3 = MapThemeColor(inst.TextColor3, oldTheme, newTheme)
+                if inst:IsA("TextBox") then
+                    inst.PlaceholderColor3 = MapThemeColor(inst.PlaceholderColor3, oldTheme, newTheme)
+                end
+            end
+            if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
+                inst.ImageColor3 = MapThemeColor(inst.ImageColor3, oldTheme, newTheme)
+            end
+            if inst:IsA("ScrollingFrame") then
+                inst.ScrollBarImageColor3 = MapThemeColor(inst.ScrollBarImageColor3, oldTheme, newTheme)
+            end
+        elseif inst:IsA("UIStroke") then
+            inst.Color = MapThemeColor(inst.Color, oldTheme, newTheme)
+        elseif inst:IsA("UIGradient") then
+            local keypoints, changed = {}, false
+            for _, point in ipairs(inst.Color.Keypoints) do
+                local color = MapThemeColor(point.Value, oldTheme, newTheme)
+                changed = changed or color ~= point.Value
+                table.insert(keypoints, ColorSequenceKeypoint.new(point.Time, color))
+            end
+            if changed then inst.Color = ColorSequence.new(keypoints) end
         end
         if inst.Name == "GlassBase" then
             local old = inst.BackgroundColor3
@@ -2489,12 +2573,6 @@ function MacUI:CreateWindow(options)
                 stroke.Color = newTheme.Border or Color3.fromRGB(255, 255, 255)
                 stroke.Transparency = newTheme.BorderTransparency or 0.7
             end
-        elseif inst:IsA("Frame") and inst.Name ~= "Frost" and inst.Name ~= "Sheen" then
-            local old = inst.BackgroundColor3
-            if old == oldTheme.TertiaryBackground then inst.BackgroundColor3 = newTheme.TertiaryBackground
-            elseif old == oldTheme.SecondaryBackground then inst.BackgroundColor3 = newTheme.SecondaryBackground
-            elseif old == oldTheme.Accent then inst.BackgroundColor3 = newTheme.Accent
-            end
         end
     end
 
@@ -2510,8 +2588,14 @@ function MacUI:CreateWindow(options)
         local oldTheme = theme
         theme = t
         if oldTheme and oldTheme ~= t then
-            for _, el in ipairs(self.Elements) do
-                if el.Object then RethemeTree(el.Object, oldTheme, t) end
+            -- Retheme the complete window, not only registered elements. That includes
+            -- title-bar chrome, dock, tabs, search, floating overlays, gradients and strokes.
+            RethemeTree(windowContainer, oldTheme, t)
+            for _, notification in ipairs(MacUI.Notifications) do
+                if notification and notification.Parent then RethemeTree(notification, oldTheme, t) end
+            end
+            if mobileOpenContainer and mobileOpenContainer.Parent then
+                RethemeTree(mobileOpenContainer, oldTheme, t)
             end
         end
         local winBase = GetGlassBase(windowContainer)
@@ -2626,6 +2710,7 @@ function MacUI:CreateWindow(options)
     function Window:Minimize()
         if self.IsMinimized then
             PlaySFX("Restore", 1.15, 0.5)
+            if mobileOpenContainer then mobileOpenContainer.Visible = false end
             windowContainer.Visible = true
             windowContainer.Size = UDim2.new(0, 0, 0, 0)
             MacUI.Tween(windowContainer, {Time = 0.3, EasingStyle = Enum.EasingStyle.Back, EasingDirection = Enum.EasingDirection.Out}, {
@@ -2640,6 +2725,10 @@ function MacUI:CreateWindow(options)
             })
             local function HideNow()
                 windowContainer.Visible = false
+                if mobileOpenContainer then
+                    mobileOpenContainer.Visible = true
+                    MacUI.PopIn(mobileOpenContainer, 0)
+                end
             end
             if t then t.Completed:Connect(HideNow) else HideNow() end
             self.IsMinimized = true
@@ -2648,7 +2737,7 @@ function MacUI:CreateWindow(options)
                 self._NotifiedHidden = true
                 MacUI:Notify({
                     Title = "Hub Hidden",
-                    Content = "Press " .. self.ToggleKey.Name .. " to show it again.",
+                    Content = self.IsMobile and "Tap Open UI to show it again." or "Press " .. self.ToggleKey.Name .. " to show it again.",
                     Icon = "eye-off",
                     Duration = 5
                 })
@@ -4639,14 +4728,168 @@ function MacUI:CreateWindow(options)
         return Tab
     end
 
+    -- A first-party dashboard shown before user-created tabs. It uses live client-side
+    -- values rather than remote calls, so it works in Studio and normal live servers.
+    function Window:CreateWelcomeTab(opts)
+        if self.WelcomeTab then return self.WelcomeTab end
+        opts = opts or {}
+        local welcomeTab = self:CreateTab({Name = opts.Name or "Welcome", Icon = opts.Icon or "home"})
+        local section = welcomeTab:CreateSection(opts.SectionName or "Welcome")
+
+        local card = CreateGlassFrame(section.Content, {
+            Radius = 14,
+            Transparency = 0.26,
+            Color = theme.TertiaryBackground
+        })
+        card.Name = "WelcomeCard"
+        card.Size = UDim2.new(1, 0, 0, 166)
+        local base = GetGlassBase(card)
+
+        local avatar = Instance.new("ImageLabel")
+        avatar.Name = "PlayerAvatar"
+        avatar.Size = UDim2.new(0, 76, 0, 76)
+        avatar.Position = UDim2.new(0, 16, 0, 16)
+        avatar.BackgroundColor3 = theme.SecondaryBackground
+        avatar.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", LocalPlayer.UserId)
+        avatar.Parent = base
+        local avatarCorner = Instance.new("UICorner")
+        avatarCorner.CornerRadius = UDim.new(1, 0)
+        avatarCorner.Parent = avatar
+        local avatarStroke = Instance.new("UIStroke")
+        avatarStroke.Color = theme.Border
+        avatarStroke.Transparency = theme.BorderTransparency or 0.55
+        avatarStroke.Thickness = 1.3
+        avatarStroke.Parent = avatar
+
+        local welcomeLabel = Instance.new("TextLabel")
+        welcomeLabel.Size = UDim2.new(1, -116, 0, 28)
+        welcomeLabel.Position = UDim2.new(0, 106, 0, 18)
+        welcomeLabel.BackgroundTransparency = 1
+        welcomeLabel.Text = "Welcome, " .. (LocalPlayer.DisplayName or LocalPlayer.Name)
+        welcomeLabel.TextColor3 = theme.Text
+        welcomeLabel.Font = Enum.Font.GothamMedium
+        welcomeLabel.TextSize = 19
+        welcomeLabel.TextXAlignment = Enum.TextXAlignment.Left
+        welcomeLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        welcomeLabel.Parent = base
+
+        local identityLabel = Instance.new("TextLabel")
+        identityLabel.Size = UDim2.new(1, -116, 0, 18)
+        identityLabel.Position = UDim2.new(0, 106, 0, 48)
+        identityLabel.BackgroundTransparency = 1
+        identityLabel.Text = "@" .. LocalPlayer.Name .. "  ·  " .. (isMobile and "Mobile" or "Desktop")
+        identityLabel.TextColor3 = theme.SecondaryText
+        identityLabel.Font = Enum.Font.Gotham
+        identityLabel.TextSize = 12
+        identityLabel.TextXAlignment = Enum.TextXAlignment.Left
+        identityLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        identityLabel.Parent = base
+
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Size = UDim2.new(1, -116, 0, 18)
+        statusLabel.Position = UDim2.new(0, 106, 0, 70)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.Text = "Loading session details…"
+        statusLabel.TextColor3 = theme.Accent
+        statusLabel.Font = Enum.Font.GothamMedium
+        statusLabel.TextSize = 12
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.Parent = base
+
+        local function MakeStat(title, position)
+            local stat = Instance.new("Frame")
+            stat.Size = UDim2.new(0.31, 0, 0, 46)
+            stat.Position = position
+            stat.BackgroundColor3 = theme.SecondaryBackground
+            stat.BackgroundTransparency = 0.3
+            stat.BorderSizePixel = 0
+            stat.Parent = base
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 9)
+            corner.Parent = stat
+            local caption = Instance.new("TextLabel")
+            caption.Size = UDim2.new(1, -12, 0, 14)
+            caption.Position = UDim2.new(0, 6, 0, 5)
+            caption.BackgroundTransparency = 1
+            caption.Text = title
+            caption.TextColor3 = theme.SecondaryText
+            caption.Font = Enum.Font.Gotham
+            caption.TextSize = 10
+            caption.TextXAlignment = Enum.TextXAlignment.Left
+            caption.Parent = stat
+            local value = Instance.new("TextLabel")
+            value.Size = UDim2.new(1, -12, 0, 19)
+            value.Position = UDim2.new(0, 6, 0, 20)
+            value.BackgroundTransparency = 1
+            value.Text = "--"
+            value.TextColor3 = theme.Text
+            value.Font = Enum.Font.GothamMedium
+            value.TextSize = 13
+            value.TextXAlignment = Enum.TextXAlignment.Left
+            value.Parent = stat
+            return value
+        end
+
+        local playersValue = MakeStat("PLAYERS", UDim2.new(0, 16, 1, -58))
+        local fpsValue = MakeStat("FPS", UDim2.new(0.345, 0, 1, -58))
+        local pingValue = MakeStat("PING", UDim2.new(0.675, 0, 1, -58))
+
+        local renderedFrames = 0
+        TrackConnection(RunService.RenderStepped:Connect(function()
+            renderedFrames = renderedFrames + 1
+        end))
+
+        local function RefreshStats()
+            if not (card and card.Parent) then return false end
+            local playerCount = #Players:GetPlayers()
+            playersValue.Text = string.format("%d / %d", playerCount, Players.MaxPlayers)
+            fpsValue.Text = tostring(renderedFrames)
+            renderedFrames = 0
+            local pingMs = 0
+            pcall(function()
+                pingMs = math.floor(LocalPlayer:GetNetworkPing() * 1000 + 0.5)
+            end)
+            pingValue.Text = pingMs > 0 and (tostring(pingMs) .. " ms") or "--"
+            statusLabel.Text = playerCount == 1 and "You have the server to yourself." or (playerCount .. " players are in this server.")
+            return true
+        end
+
+        TrackConnection(Players.PlayerAdded:Connect(RefreshStats))
+        TrackConnection(Players.PlayerRemoving:Connect(function()
+            task.defer(RefreshStats)
+        end))
+        task.spawn(function()
+            while RefreshStats() do task.wait(1) end
+        end)
+
+        self.WelcomeTab = welcomeTab
+        self.WelcomeCard = card
+        return welcomeTab
+    end
+
+    -- The welcome dashboard is intentionally the first tab so it is selected as the UI opens.
+    if options.WelcomeTab ~= false then
+        Window:CreateWelcomeTab(options.WelcomeTabOptions)
+    end
+
     function Window:CreateSearch()
+        -- Search used to be defined but never created, leaving the title-bar icon with
+        -- no click connection. Keep this public method idempotent for callers that also
+        -- create it manually, while CreateWindow now initializes it automatically.
+        if self.Search then return self.Search end
+
         local searchFrame = CreateGlassFrame(window, {Radius = 10, Transparency = 0.1})
         searchFrame.Size = UDim2.new(0, 280, 0, 36)
-        searchFrame.Position = UDim2.new(1, -300, 0, 4)
+        -- Leave a clear gap for the search icon so it remains clickable to close the panel.
+        searchFrame.Position = UDim2.new(1, -326, 0, 4)
         searchFrame.Visible = false
         searchFrame.ZIndex = 50
 
         local searchBase = GetGlassBase(searchFrame)
+        searchBase.ZIndex = 51
+        for _, child in ipairs(searchBase:GetDescendants()) do
+            if child:IsA("GuiObject") then child.ZIndex = 52 end
+        end
         local searchBox = Instance.new("TextBox")
         searchBox.Size = UDim2.new(1, -12, 1, -8)
         searchBox.Position = UDim2.new(0, 6, 0, 4)
@@ -4657,7 +4900,24 @@ function MacUI:CreateWindow(options)
         searchBox.PlaceholderColor3 = theme.SecondaryText
         searchBox.Font = Enum.Font.Gotham
         searchBox.TextSize = 14
+        searchBox.ZIndex = 53
         searchBox.Parent = searchBase
+
+        local function ApplyFilter()
+            local query = string.lower(searchBox.Text)
+            for _, el in ipairs(Window.Elements) do
+                if el.Object and el.Object.Parent and Window.CurrentTab and el.Object:IsDescendantOf(Window.CurrentTab.Content) then
+                    local match = query == "" or string.find(string.lower(el.Name or ""), query, 1, true) ~= nil
+                    el.Object.Visible = match
+                end
+            end
+        end
+
+        local function CloseSearch()
+            searchFrame.Visible = false
+            if searchBox.Text ~= "" then searchBox.Text = "" end
+            searchBox:ReleaseFocus()
+        end
 
         TrackConnection(searchBtn.MouseButton1Click:Connect(function()
             searchFrame.Visible = not searchFrame.Visible
@@ -4666,19 +4926,26 @@ function MacUI:CreateWindow(options)
                 searchBox:CaptureFocus()
             else
                 PlaySFX("Release", 1.0, 0.28)
+                CloseSearch()
             end
         end))
 
         TrackConnection(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-            local query = string.lower(searchBox.Text)
-            for _, el in ipairs(Window.Elements) do
-                if el.Object and el.Object.Parent then
-                    local match = query == "" or string.find(string.lower(el.Name or ""), query)
-                    el.Object.Visible = match and true or false
-                end
+            ApplyFilter()
+        end))
+        TrackConnection(UserInputService.InputBegan:Connect(function(input, processed)
+            if not processed and searchFrame.Visible and input.KeyCode == Enum.KeyCode.Escape then
+                PlaySFX("Release", 0.9, 0.22)
+                CloseSearch()
             end
         end))
+
+        self.Search = {Frame = searchFrame, Box = searchBox, Close = CloseSearch, Apply = ApplyFilter}
+        return self.Search
     end
+
+    -- Wire the title-bar search icon for every window by default.
+    Window:CreateSearch()
 
     -- Opening animation
     local function OpenWindow()
