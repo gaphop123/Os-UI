@@ -1,8 +1,19 @@
-# MacUI v2.7 — Tahoe Liquid Glass for Roblox
+# Os-UI — MacUI & WinUI for Roblox
+
+Two visual-language sibling libraries sharing one `CreateWindow → CreateTab → CreateSection → Create<Element>` API:
+
+| Library | Style | File |
+| --- | --- | --- |
+| **MacUI** | macOS Tahoe liquid glass | `MacUI.luau` |
+| **WinUI** | Windows 11 Fluent / PowerToys settings app | `WinUI.luau` |
+
+---
+
+## MacUI v2.7 — Tahoe Liquid Glass
 
 MacUI is a macOS-inspired Roblox UI library with Tahoe-style liquid glass, Golden Gate warmth, animated dock navigation, a boot screen, Lucide icons, settings/config support, and polished SFX.
 
-## Load
+### Load
 
 ```lua
 local MacUI = loadstring(game:HttpGet(
@@ -10,13 +21,13 @@ local MacUI = loadstring(game:HttpGet(
 ))()
 ```
 
-## What’s new in v2.7
+### What's new in v2.7
 
 - Touch-only players get a floating **Open UI** button after minimizing; PC and keyboard-capable players keep the existing hotkey flow.
-- A Welcome tab now opens first, with the player’s headshot, account name, device type, live player count, FPS, and ping.
+- A Welcome tab now opens first, with the player's headshot, account name, device type, live player count, FPS, and ping.
 - Set `WelcomeTab = false` in `CreateWindow` if you want to opt out of the built-in dashboard.
 
-## v2.6 highlights
+### v2.6 highlights
 
 - Tahoe glass refresh: a refractive inner edge, accent bloom, stronger specular depth, and an optional window-only light sweep.
 - Two new themes: `Tahoe Dawn` and `Golden Gate Dawn`.
@@ -24,7 +35,7 @@ local MacUI = loadstring(game:HttpGet(
 - New sound hooks: `Tick`, `Sparkle`, and `Callout`; existing SFX remain compatible.
 - Progress bars now use a subtle animated sheen when their value changes.
 
-## Quick start
+### Quick start
 
 ```lua
 local MacUI = loadstring(game:HttpGet(
@@ -38,182 +49,179 @@ local Window = MacUI:CreateWindow({
     Boot = true,
     Dock = true,
     Acrylic = true,
-    TahoeMotion = true, -- slow, window-only glass light sweep
+    TahoeMotion = true,
     Metaballs = true,
     Size = UDim2.new(0, 760, 0, 500),
     MinSize = Vector2.new(480, 320),
     ToggleKey = Enum.KeyCode.RightControl,
-    ConfigurationSaving = {
-        Enabled = true,
-        Folder = "MyHub",
-        File = "settings"
-    }
+    ConfigurationSaving = { Enabled = true, Folder = "MyHub", File = "settings" }
 })
 
 local Home = Window:CreateTab({Name = "Home", Icon = "home"})
 local Main = Home:CreateSection({Name = "Controls", Collapsible = true})
 
 Main:CreateToggle({
-    Name = "Auto Farm",
-    CurrentValue = false,
-    Flag = "AutoFarm",
-    Callback = function(enabled)
-        print("Auto farm:", enabled)
-    end
+    Name = "Auto Farm", CurrentValue = false, Flag = "AutoFarm",
+    Callback = function(enabled) print("Auto farm:", enabled) end
 })
-
-Main:CreateStepper({
-    Name = "Walk Speed",
-    Min = 16,
-    Max = 120,
-    Step = 4,
-    CurrentValue = 24,
-    Suffix = " studs/s",
-    Flag = "WalkSpeed",
-    Callback = function(value)
-        print("Speed:", value)
-    end
-})
-
-Main:CreateRating({
-    Name = "Experience",
-    Max = 5,
-    CurrentValue = 4,
-    Flag = "ExperienceRating",
-    Callback = function(stars)
-        print("Rating:", stars)
-    end
-})
-
-Main:CreateCallout({
-    Style = "Info", -- Info, Success, Warning, Danger or Error
-    Title = "Tahoe glass enabled",
-    Content = "The ambient sweep respects Reduce Motion."
-})
-
-local Progress = Main:CreateProgressBar({Name = "Loading", CurrentValue = 0})
-Progress:Set(65)
 
 Window:CreateSettingsTab()
 ```
 
-## Window options
+### Window options
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `Name` | `"MacUI"` | Window title |
-| `Subtitle` | `""` | Title-bar supporting text |
 | `Theme` | `"Golden Gate"` | Starting theme |
 | `Boot` | `true` | Show the Apple-style boot sequence |
 | `Dock` | `true` | Show bottom dock navigation |
 | `Acrylic` | `true` | Use translucent window glass |
 | `TahoeMotion` | `false` | Animate one subtle light sweep across the window |
 | `Metaballs` | `false` | Add drifting liquid blobs behind the window tint |
-| `Size` | `760 × 500` | Initial `UDim2` size |
-| `MinSize` / `MaxSize` | `480 × 320` / `nil` | Resize bounds |
-| `Resizable` | `true` | Show the bottom-right resize grip |
-| `ToggleKey` | `RightControl` | Hide/show key |
-| `WelcomeTab` | `true` | Open the built-in player/server dashboard first; set `false` to omit it |
+| `WelcomeTab` | `true` | Open the built-in player/server dashboard first |
 
-## Themes
+### Themes
 
-Built in: `Golden Gate`, `Golden Gate Dawn`, `Tahoe Dawn`, `Liquid Glass Dark`, `Liquid Glass Light`, `Graphite`, `Midnight`, `Blue`, `Purple`, `Nord`, `Solarized`, `Rose Pine`, `Forest`, `Classic Aqua`, `Crimson`, `Ocean`, `Lavender`, `Monochrome`, `Sunset`, `Arctic`, and `Halloween`.
+`Golden Gate`, `Golden Gate Dawn`, `Tahoe Dawn`, `Liquid Glass Dark`, `Liquid Glass Light`, `Graphite`, `Midnight`, `Blue`, `Purple`, `Nord`, `Solarized`, `Rose Pine`, `Forest`, `Classic Aqua`, `Crimson`, `Ocean`, `Lavender`, `Monochrome`, `Sunset`, `Arctic`, `Halloween`.
+
+### Elements
+
+`CreateButton`, `CreateToggle`, `CreateCheckbox`, `CreateSlider`, `CreateStepper`, `CreateDropdown`, `CreateRadioGroup`, `CreateSegmentedControl`, `CreateInput`, `CreateKeybind`, `CreateColorPicker`, `CreateRating`, `CreateProgressBar`, `CreateLabel`, `CreateParagraph`, `CreateCallout`.
+
+Full details (key system, window helpers, motion/accessibility, sound keys) are unchanged from prior releases — see inline doc comments in `MacUI.luau`.
+
+---
+
+## WinUI v3.0 — Windows 11 Fluent / PowerToys
+
+WinUI is reskinned from the ground up for a **Windows 11 Mica + PowerToys settings-app** look: a left `NavigationView` with icon+label tabs and a sliding accent selection indicator, `SettingsCard`-style sections with divided rows, Win11 toggle pills, a real title bar with hover-highlighted minimize/maximize/close buttons, and InfoBar-style callouts.
+
+### Load
 
 ```lua
-MacUI:SetTheme("Golden Gate Dawn")
-MacUI:SetTheme("Tahoe Dawn")
-
--- Classic three-layer glass remains available for minimal UIs.
-MacUI:SetGlassStyle({Tahoe = false})
+local WinUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"
+))()
 ```
 
-`MacUI:SetTheme(name)` recolors existing windows. Register a palette with `MacUI:RegisterTheme(name, themeTable)`, or attach an optional PixelJSON background with:
+### What's new in v3.0
+
+- Full Windows 11 / PowerToys visual rewrite (previous releases looked like Windows 10).
+- Left `NavigationView` tabs (collapsible to icon-only via the hamburger button) replace the old taskbar-style tab bar.
+- Sections are now `SettingsCard` groups: a card per section, with each element rendered as a divided row (label + description on the left, control on the right) — matching PowerToys' module pages exactly.
+- New elements: `CreateNumberBox` (spinner), `CreateCallout` (InfoBar banner with Info/Success/Warning/Danger styles), `CreateSegmentedControl`.
+- New themes: `Windows 11 Dark`, `Windows 11 Light`, `PowerToys Dark`, `Mica Blue`.
+
+### Quick start
 
 ```lua
-MacUI:SetThemeImage("Tahoe Dawn", "https://example.com/background.json", {
-    Transparency = 0.42,
-    Fit = "cover"
+local WinUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/gaphop123/Os-UI/refs/heads/main/WinUI.luau"
+))()
+
+local Window = WinUI:CreateWindow({
+    Name = "My Hub",
+    Subtitle = "v3.0",
+    Theme = "PowerToys Dark",
+    Size = UDim2.new(0, 840, 0, 540),
+    MinSize = Vector2.new(620, 400),
+    ToggleKey = Enum.KeyCode.RightControl,
+    ConfigurationSaving = { Enabled = true, Folder = "MyHub", File = "settings" }
 })
+
+local Tab1 = Window:CreateTab({ Name = "General", Icon = "home" })
+local Section1 = Tab1:CreateSection({ Name = "Core" })
+local Section2 = Tab1:CreateSection({ Name = "Advanced", Collapsible = true })
+
+Section1:CreateToggle({
+    Name = "Auto Farm", Description = "Automatically farm nearby nodes",
+    CurrentValue = false, Flag = "AutoFarm",
+    Callback = function(enabled) print("Auto farm:", enabled) end
+})
+
+Section1:CreateSlider({
+    Name = "Walk Speed", Description = "Character movement speed",
+    Min = 16, Max = 120, Increment = 4, CurrentValue = 24, Flag = "WalkSpeed",
+    Callback = function(value) print("Speed:", value) end
+})
+
+Section2:CreateNumberBox({
+    Name = "Retry Count", Min = 0, Max = 10, Step = 1, CurrentValue = 3,
+    Callback = function(value) print("Retries:", value) end
+})
+
+Section2:CreateCallout({
+    Style = "Warning", Title = "Experimental",
+    Content = "This section changes server-side behavior."
+})
+
+local Tab2 = Window:CreateTab({ Name = "Visuals", Icon = "eye" })
+local VisSection = Tab2:CreateSection({ Name = "Display" })
+
+VisSection:CreateDropdown({
+    Name = "Theme Preview", Options = {"Windows 11 Dark", "Windows 11 Light", "PowerToys Dark", "Mica Blue"},
+    CurrentOption = "PowerToys Dark",
+    Callback = function(v) WinUI:SetTheme(v) end
+})
+
+Window:CreateSettingsTab()
 ```
 
-## Elements
+### Window options
 
-Every interactive element uses `Callback`, and most accept `Flag` for config persistence. Returned handles provide `Set(...)` / `Get()` where applicable.
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `Name` | `"WinUI"` | Window title (rendered in the title bar) |
+| `Subtitle` | `""` | Appended after the title, matching Win11 title bars |
+| `Theme` | `"Windows 11 Dark"` | Starting theme |
+| `Accent` | Theme default | Override the accent color used for selection, toggles, and fills |
+| `Size` | `840 × 540` | Initial `UDim2` size |
+| `MinSize` | `620 × 400` | Resize floor (`UISizeConstraint`) |
+| `ToggleKey` | `RightControl` | Hide/show key |
+| `NavCollapsed` | `false` | Start the left nav in icon-only mode |
+| `ConfigurationSaving` | — | `{ Enabled, Folder, File }`, same shape as MacUI |
+
+### Themes
+
+`Windows 11 Dark`, `Windows 11 Light`, `PowerToys Dark`, `Mica Blue`. Register more with `WinUI:RegisterTheme(name, themeTable)` and switch at runtime with `WinUI:SetTheme(name)`.
+
+### Layout — Tab → Section → Elements
+
+```
+Window
+ └─ Tab1 (left nav item, icon + label)
+     ├─ Section ("SettingsCard" group with a title bar)
+     │    ├─ element row
+     │    ├─ divider
+     │    └─ element row
+     └─ Section (Collapsible = true → chevron toggles the card)
+ └─ Tab2
+     └─ Section
+         └─ ...
+```
+
+### Elements
+
+Every element lives on a `Section` and takes `Name`, `Description` (optional, shown as secondary text under the label like PowerToys), `Flag` (for config persistence), and `Callback`.
 
 | Element | Use |
 | --- | --- |
-| `CreateButton` | Button with optional description |
-| `CreateToggle`, `CreateCheckbox` | Boolean inputs |
-| `CreateSlider`, `CreateStepper` | Numeric inputs; use `Stepper` for exact increments |
-| `CreateDropdown`, `CreateRadioGroup`, `CreateSegmentedControl` | Single-choice inputs |
-| `CreateInput`, `CreateKeybind` | Text and key input |
-| `CreateColorPicker` | Hue/saturation/value picker |
-| `CreateRating` | 1–N star rating with hover preview |
-| `CreateProgressBar` | Animated non-interactive progress indicator |
-| `CreateLabel`, `CreateParagraph`, `CreateCallout` | Informational content |
+| `CreateToggle` | Win11 pill switch |
+| `CreateCheckbox` | Square checkbox |
+| `CreateButton` | Accent-filled action button |
+| `CreateSlider` | Drag-to-set numeric slider with live value label |
+| `CreateNumberBox` | PowerToys-style spinner with up/down steppers |
+| `CreateDropdown` | Combo box that opens a flyout list |
+| `CreateSegmentedControl` | Horizontal pivot/segmented buttons |
+| `CreateInput` | Single-line text box |
+| `CreateKeybind` | Click-to-rebind key capture |
+| `CreateColorPicker` | Swatch that cycles an accent palette |
+| `CreateProgressBar` | Thin animated progress fill |
+| `CreateLabel`, `CreateParagraph` | Plain and title+body text rows |
+| `CreateCallout` | InfoBar banner (`Style = "Info"/"Success"/"Warning"/"Danger"`) |
 
-### Stepper
-
-```lua
-local Amount = Section:CreateStepper({
-    Name = "Amount",
-    Min = 0,
-    Max = 50,
-    Step = 5,
-    CurrentValue = 10,
-    Suffix = "x",
-    Flag = "Amount"
-})
-
-Amount:Set(25)
-print(Amount:Get())
-```
-
-### Rating
-
-```lua
-Section:CreateRating({
-    Name = "Rate this UI",
-    Max = 5,
-    CurrentValue = 0,
-    Callback = function(value)
-        MacUI:Notify({
-            Title = "Thanks!",
-            Content = "You chose " .. value .. " stars.",
-            Icon = "star"
-        })
-    end
-})
-```
-
-### Callout
-
-```lua
-Section:CreateCallout({
-    Style = "Warning",
-    Title = "Experimental setting",
-    Content = "This action may change how your character moves."
-})
-```
-
-## Motion, accessibility, and sound
-
-All library motion goes through `MacUI.Tween`, which immediately resolves when reduced motion is enabled. SFX also respect this setting.
-
-```lua
-MacUI:SetAccessibility({
-    ReducedMotion = true,
-    HighContrast = false,
-    Scale = 1
-})
-
-MacUI:SetSFXVolume(0.45) -- 0–1; use 0 to mute
-MacUI.PlaySound("Sparkle")
-```
-
-Available sound keys include `Click`, `Hover`, `ToggleOn`, `ToggleOff`, `Success`, `Error`, `Notify`, `Boot`, `Dock`, `Open`, `Close`, `Tab`, `Slider`, `Focus`, `Dropdown`, `Segment`, `Grab`, `Release`, `Search`, `Color`, `Check`, `Radio`, `Rating`, `Progress`, `Expand`, `Collapse`, `Stepper`, `Tick`, `Sparkle`, and `Callout`.
-
-## Window helpers
+### Window helpers
 
 ```lua
 Window:SetTitle("New title", "New subtitle")
@@ -225,40 +233,15 @@ Window:LoadConfig()
 Window:Destroy()
 ```
 
-## Built-in search
-
-Every window now creates its title-bar search automatically. Click the magnifying-glass icon to filter controls in the active tab by name; click it again or press `Escape` to clear and close the search panel. `Window:CreateSearch()` remains available and is safe to call repeatedly.
-
-Sections can collapse cleanly without changing their content’s layout:
+### Notifications
 
 ```lua
-local Section = Tab:CreateSection({
-    Name = "Advanced",
-    Collapsible = true,
-    Collapsed = false
+WinUI:Notify({
+    Title = "Saved",
+    Content = "Your settings were saved.",
+    Style = "Success", -- Info, Success, Warning, Danger/Error
+    Duration = 4
 })
-
-Section:Toggle()
-Section:SetCollapsed(true)
-print(Section:IsCollapsed())
 ```
 
-## Key system
-
-```lua
-MacUI:SetupKeySystem({
-    Enabled = true,
-    Key = "ABC-123",
-    Timer = 3600,
-    Title = "My Hub",
-    Note = "Enter your access key"
-})
-
-MacUI:RunKeySystem(function()
-    -- Create the window here.
-end, function(reason)
-    warn("Key system:", reason) -- invalid_key or closed
-end)
-```
-
-MacUI runs in Roblox Studio and executor environments. File-backed configuration is used only when the host provides file APIs; the interface continues to work without them.
+WinUI runs in Roblox Studio and executor environments. File-backed configuration is used only when the host provides `writefile`/`readfile`/`isfile`/`makefolder`/`isfolder`; the interface continues to work without them.
