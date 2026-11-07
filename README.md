@@ -1,13 +1,5 @@
-# Os-UI — MacUI & WinUI for Roblox
+# Os-UI — MacUI &  for Roblox
 
-Two visual-language sibling libraries sharing one `CreateWindow → CreateTab → CreateSection → Create<Element>` API:
-
-| Library | Style | File |
-| --- | --- | --- |
-| **MacUI** | macOS Tahoe liquid glass | `MacUI.luau` |
-| **WinUI** | Windows 11 Fluent / PowerToys settings app | `WinUI.luau` |
-
----
 
 ## MacUI v2.7 — Tahoe Liquid Glass
 
